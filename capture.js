@@ -102,7 +102,7 @@ function getOldStation(oldData, station) {
 
 
 /* =========================================================
-   H264 STREAM CHECK
+   H264 STREAM
 ========================================================= */
 
 function isH264Stream(url) {
@@ -115,13 +115,19 @@ function isH264Stream(url) {
         return false;
     }
 
-    return /live-h264-(?:240|360|480)\.m3u8/i.test(url);
+    if (
+        /\/cdn\/manifest\//i.test(url)
+    ) {
+        return false;
+    }
+
+    return /live-h264-\d+\.m3u8/i.test(url);
 
 }
 
 
 /* =========================================================
-   GET QUALITY
+   QUALITY
 ========================================================= */
 
 function getQuality(url) {
@@ -141,10 +147,507 @@ function getQuality(url) {
 
 
 /* =========================================================
-   CAPTURE + VERIFY PLAYBACK
+   FIND DAILYMOTION FRAME
 ========================================================= */
 
-async function captureStation(browser, station) {
+function getDailymotionFrame(page) {
+
+    return page.frames().find(
+        frame =>
+            /geo\.dailymotion\.com/i.test(
+                frame.url()
+            )
+    ) || null;
+
+}
+
+
+/* =========================================================
+   CLICK REAL PLAY BUTTON
+========================================================= */
+
+async function clickRealPlayButton(page) {
+
+    console.log("");
+    console.log(
+        "Looking for Dailymotion player..."
+    );
+
+
+    let frame = null;
+
+
+    for (
+        let attempt = 1;
+        attempt <= 20;
+        attempt++
+    ) {
+
+        frame =
+            getDailymotionFrame(page);
+
+
+        if (frame) {
+
+            console.log(
+                `Dailymotion iframe found. Attempt ${attempt}`
+            );
+
+            break;
+
+        }
+
+
+        await page.waitForTimeout(
+            1000
+        );
+
+    }
+
+
+    if (!frame) {
+
+        console.log(
+            "Dailymotion iframe NOT FOUND."
+        );
+
+        return false;
+
+    }
+
+
+    console.log("");
+    console.log(
+        "Dailymotion frame:"
+    );
+
+    console.log(
+        frame.url()
+    );
+
+
+    /*
+     * Give the player time to build
+     * its controls.
+     */
+
+    await page.waitForTimeout(
+        3000
+    );
+
+
+    /* =====================================================
+       FIND PLAY BUTTONS
+    ===================================================== */
+
+    const buttons =
+        await frame.locator(
+            "button"
+        ).evaluateAll(
+            elements =>
+                elements.map(
+                    (element, index) => ({
+
+                        index,
+
+                        text:
+                            (
+                                element.innerText ||
+                                ""
+                            ).trim(),
+
+                        aria:
+                            element.getAttribute(
+                                "aria-label"
+                            ) || "",
+
+                        title:
+                            element.getAttribute(
+                                "title"
+                            ) || "",
+
+                        cls:
+                            typeof element.className ===
+                            "string"
+                                ? element.className
+                                : ""
+
+                    })
+                )
+        )
+        .catch(
+            () => []
+        );
+
+
+    console.log("");
+    console.log(
+        "DAILYMOTION BUTTONS:"
+    );
+
+    console.log(
+        JSON.stringify(
+            buttons,
+            null,
+            2
+        )
+    );
+
+
+    /* =====================================================
+       TRY ARIA PLAY
+    ===================================================== */
+
+    const playSelectors = [
+
+        'button[aria-label*="Play" i]',
+
+        'button[title*="Play" i]',
+
+        'button[aria-label*="تشغيل" i]',
+
+        'button[title*="تشغيل" i]'
+
+    ];
+
+
+    for (
+        const selector of playSelectors
+    ) {
+
+        const button =
+            frame.locator(
+                selector
+            ).first();
+
+
+        if (
+            await button.count()
+        ) {
+
+            try {
+
+                await button.click({
+                    timeout: 5000
+                });
+
+
+                console.log("");
+                console.log(
+                    "PLAY BUTTON CLICKED"
+                );
+
+                console.log(
+                    `Selector: ${selector}`
+                );
+
+
+                return true;
+
+            }
+            catch (error) {
+
+                console.log(
+                    `Could not click ${selector}`
+                );
+
+            }
+
+        }
+
+    }
+
+
+    /* =====================================================
+       TRY DAILYMOTION PLAY BUTTON CLASSES
+    ===================================================== */
+
+    const classSelectors = [
+
+        ".dmp_Player__playButton",
+
+        ".dmp_Player__play",
+
+        ".dmp_Player__centerPlayButton",
+
+        '[class*="playButton"]',
+
+        '[class*="play-button"]',
+
+        '[class*="play_button"]'
+
+    ];
+
+
+    for (
+        const selector of classSelectors
+    ) {
+
+        const button =
+            frame.locator(
+                selector
+            ).first();
+
+
+        if (
+            await button.count()
+        ) {
+
+            try {
+
+                await button.click({
+                    timeout: 5000
+                });
+
+
+                console.log("");
+                console.log(
+                    "PLAY BUTTON CLICKED"
+                );
+
+                console.log(
+                    `Selector: ${selector}`
+                );
+
+
+                return true;
+
+            }
+            catch (error) {
+
+                console.log(
+                    `Could not click ${selector}`
+                );
+
+            }
+
+        }
+
+    }
+
+
+    /* =====================================================
+       LAST OPTION:
+       CLICK CENTER OF PLAYER
+    ===================================================== */
+
+    try {
+
+        const player =
+            frame.locator(
+                "video"
+            ).first();
+
+
+        if (
+            await player.count()
+        ) {
+
+            const box =
+                await player.boundingBox();
+
+
+            if (box) {
+
+                await page.mouse.click(
+                    box.x +
+                        box.width / 2,
+
+                    box.y +
+                        box.height / 2
+                );
+
+
+                console.log("");
+                console.log(
+                    "CLICKED PLAYER CENTER"
+                );
+
+
+                return true;
+
+            }
+
+        }
+
+    }
+    catch (error) {
+
+        console.log(
+            "Could not click player center."
+        );
+
+    }
+
+
+    console.log("");
+    console.log(
+        "PLAY BUTTON NOT FOUND."
+    );
+
+
+    return false;
+
+}
+
+
+/* =========================================================
+   VERIFY DAILYMOTION PLAYBACK
+========================================================= */
+
+async function verifyPlayback(page) {
+
+    console.log("");
+    console.log(
+        "Verifying actual playback..."
+    );
+
+
+    const frame =
+        getDailymotionFrame(page);
+
+
+    if (!frame) {
+
+        console.log(
+            "Dailymotion frame disappeared."
+        );
+
+        return false;
+
+    }
+
+
+    let previousTime = -1;
+
+
+    for (
+        let i = 1;
+        i <= 20;
+        i++
+    ) {
+
+        await page.waitForTimeout(
+            1500
+        );
+
+
+        const state =
+            await frame.locator(
+                "video, audio"
+            ).evaluateAll(
+                elements =>
+                    elements.map(
+                        element => ({
+
+                            tag:
+                                element.tagName,
+
+                            paused:
+                                element.paused,
+
+                            readyState:
+                                element.readyState,
+
+                            currentTime:
+                                element.currentTime,
+
+                            duration:
+                                element.duration,
+
+                            src:
+                                element.currentSrc ||
+                                element.src ||
+                                ""
+
+                        })
+                    )
+            )
+            .catch(
+                () => []
+            );
+
+
+        console.log("");
+        console.log(
+            `PLAYBACK CHECK ${i}/20`
+        );
+
+        console.log(
+            JSON.stringify(
+                state,
+                null,
+                2
+            )
+        );
+
+
+        const playing =
+            state.find(
+                media =>
+                    media.paused === false &&
+                    media.readyState >= 2 &&
+                    media.currentTime > 0
+            );
+
+
+        if (playing) {
+
+            if (
+                previousTime >= 0 &&
+                playing.currentTime >
+                    previousTime
+            ) {
+
+                console.log("");
+                console.log(
+                    "================================"
+                );
+
+                console.log(
+                    "PLAYBACK CONFIRMED"
+                );
+
+                console.log(
+                    `Current time: ${playing.currentTime}`
+                );
+
+                console.log(
+                    "================================"
+                );
+
+                return true;
+
+            }
+
+
+            previousTime =
+                playing.currentTime;
+
+        }
+
+    }
+
+
+    console.log("");
+    console.log(
+        "PLAYBACK NOT CONFIRMED."
+    );
+
+
+    return false;
+
+}
+
+
+/* =========================================================
+   CAPTURE STATION
+========================================================= */
+
+async function captureStation(
+    browser,
+    station
+) {
 
     console.log("");
     console.log(
@@ -172,12 +675,8 @@ async function captureStation(browser, station) {
         new Map();
 
 
-    let playbackStarted =
-        false;
-
-
     /* =====================================================
-       CAPTURE H264 REQUESTS
+       NETWORK CAPTURE
     ===================================================== */
 
     page.on(
@@ -188,8 +687,12 @@ async function captureStation(browser, station) {
                 request.url();
 
 
-            if (!isH264Stream(url)) {
+            if (
+                !isH264Stream(url)
+            ) {
+
                 return;
+
             }
 
 
@@ -208,7 +711,9 @@ async function captureStation(browser, station) {
                 `H264 ${quality} FOUND`
             );
 
-            console.log(url);
+            console.log(
+                url
+            );
 
         }
     );
@@ -234,274 +739,75 @@ async function captureStation(browser, station) {
 
 
         /* =================================================
-           FIND VIDEO / AUDIO ELEMENTS
+           CLICK REAL DAILYMOTION PLAY
         ================================================= */
 
-        const mediaInfo =
-            await page.evaluate(
-                () => {
-
-                    const media =
-                        [
-                            ...document.querySelectorAll(
-                                "video, audio"
-                            )
-                        ];
-
-                    return media.map(
-                        element => ({
-
-                            tag:
-                                element.tagName,
-
-                            paused:
-                                element.paused,
-
-                            readyState:
-                                element.readyState,
-
-                            currentTime:
-                                element.currentTime,
-
-                            src:
-                                element.currentSrc ||
-                                element.src ||
-                                ""
-
-                        })
-                    );
-
-                }
+        const clicked =
+            await clickRealPlayButton(
+                page
             );
 
 
-        console.log("");
-        console.log(
-            "MEDIA ELEMENTS:"
-        );
-
-        console.log(
-            JSON.stringify(
-                mediaInfo,
-                null,
-                2
-            )
-        );
-
-
-        /* =================================================
-           TRY TO PLAY MEDIA
-        ================================================= */
-
-        const playResult =
-            await page.evaluate(
-                async () => {
-
-                    const media =
-                        [
-                            ...document.querySelectorAll(
-                                "video, audio"
-                            )
-                        ];
-
-                    const results = [];
-
-                    for (
-                        const element of media
-                    ) {
-
-                        try {
-
-                            element.muted = true;
-
-                            const result =
-                                element.play();
-
-
-                            if (
-                                result &&
-                                typeof result.then === "function"
-                            ) {
-
-                                await result;
-
-                            }
-
-
-                            results.push({
-
-                                tag:
-                                    element.tagName,
-
-                                playing:
-                                    !element.paused,
-
-                                readyState:
-                                    element.readyState,
-
-                                currentTime:
-                                    element.currentTime
-
-                            });
-
-                        }
-                        catch (error) {
-
-                            results.push({
-
-                                tag:
-                                    element.tagName,
-
-                                playing:
-                                    false,
-
-                                error:
-                                    error.message
-
-                            });
-
-                        }
-
-                    }
-
-
-                    return results;
-
-                }
-            );
-
-
-        console.log("");
-        console.log(
-            "PLAY RESULT:"
-        );
-
-        console.log(
-            JSON.stringify(
-                playResult,
-                null,
-                2
-            )
-        );
-
-
-        /* =================================================
-           WAIT FOR ACTUAL PLAYBACK
-        ================================================= */
-
-        for (
-            let i = 0;
-            i < 15;
-            i++
-        ) {
-
-            await page.waitForTimeout(
-                2000
-            );
-
-
-            const state =
-                await page.evaluate(
-                    () => {
-
-                        const media =
-                            [
-                                ...document.querySelectorAll(
-                                    "video, audio"
-                                )
-                            ];
-
-
-                        return media.map(
-                            element => ({
-
-                                tag:
-                                    element.tagName,
-
-                                paused:
-                                    element.paused,
-
-                                readyState:
-                                    element.readyState,
-
-                                currentTime:
-                                    element.currentTime,
-
-                                src:
-                                    element.currentSrc ||
-                                    element.src ||
-                                    ""
-
-                            })
-                        );
-
-                    }
-                );
-
+        if (!clicked) {
 
             console.log("");
             console.log(
-                `PLAYBACK CHECK ${i + 1}/15`
+                "COULD NOT START PLAYER."
+            );
+
+            await page.close();
+
+            return null;
+
+        }
+
+
+        /* =================================================
+           VERIFY ACTUAL PLAYBACK
+        ================================================= */
+
+        const playing =
+            await verifyPlayback(
+                page
+            );
+
+
+        if (!playing) {
+
+            console.log("");
+            console.log(
+                "STREAM REJECTED."
             );
 
             console.log(
-                JSON.stringify(
-                    state,
-                    null,
-                    2
-                )
+                "Reason: playback was not confirmed."
             );
 
+            await page.close();
 
-            /*
-             * Actual playback means:
-             *
-             * paused = false
-             * readyState >= 2
-             * currentTime > 0
-             */
-
-            const playingMedia =
-                state.find(
-                    media =>
-                        media.paused === false &&
-                        media.readyState >= 2 &&
-                        media.currentTime > 0
-                );
-
-
-            if (playingMedia) {
-
-                playbackStarted =
-                    true;
-
-
-                console.log("");
-                console.log(
-                    "========================================"
-                );
-
-                console.log(
-                    "PLAYBACK CONFIRMED"
-                );
-
-                console.log(
-                    `MEDIA: ${playingMedia.tag}`
-                );
-
-                console.log(
-                    `CURRENT TIME: ${playingMedia.currentTime}`
-                );
-
-                console.log(
-                    "========================================"
-                );
-
-                break;
-
-            }
+            return null;
 
         }
+
+
+        /* =================================================
+           AFTER PLAYBACK CONFIRMATION
+           WAIT FOR QUALITY REQUESTS
+        ================================================= */
+
+        console.log("");
+        console.log(
+            "Playback confirmed."
+        );
+
+        console.log(
+            "Waiting for H264 quality streams..."
+        );
+
+
+        await page.waitForTimeout(
+            10000
+        );
 
 
     } catch (error) {
@@ -515,28 +821,6 @@ async function captureStation(browser, station) {
             error.message
         );
 
-        await page.close();
-
-        return null;
-
-    }
-
-
-    /* =====================================================
-       DO NOT ACCEPT ANY STREAM WITHOUT PLAYBACK
-    ===================================================== */
-
-    if (!playbackStarted) {
-
-        console.log("");
-        console.log(
-            "PLAYBACK NOT CONFIRMED"
-        );
-
-        console.log(
-            `REJECTED: ${station.name}`
-        );
-
 
         await page.close();
 
@@ -546,8 +830,13 @@ async function captureStation(browser, station) {
 
 
     /* =====================================================
-       PLAYBACK CONFIRMED
-       NOW SELECT QUALITY
+       SELECT QUALITY
+
+       480
+       ↓
+       360
+       ↓
+       240
     ===================================================== */
 
     console.log("");
@@ -568,50 +857,42 @@ async function captureStation(browser, station) {
         null;
 
 
-    /*
-     * 480 FIRST
-     */
-
-    if (streams.has(480)) {
+    if (
+        streams.has(480)
+    ) {
 
         selectedStream =
             streams.get(480);
 
         console.log("");
         console.log(
-            "SELECTED QUALITY: 480"
+            "SELECTED H264 480"
         );
 
     }
-
-    /*
-     * 360 SECOND
-     */
-
-    else if (streams.has(360)) {
+    else if (
+        streams.has(360)
+    ) {
 
         selectedStream =
             streams.get(360);
 
         console.log("");
         console.log(
-            "SELECTED QUALITY: 360"
+            "SELECTED H264 360"
         );
 
     }
-
-    /*
-     * 240 LAST
-     */
-
-    else if (streams.has(240)) {
+    else if (
+        streams.has(240)
+    ) {
 
         selectedStream =
             streams.get(240);
 
         console.log("");
         console.log(
-            "SELECTED QUALITY: 240"
+            "SELECTED H264 240"
         );
 
     }
@@ -624,7 +905,7 @@ async function captureStation(browser, station) {
 
         console.log("");
         console.log(
-            "PLAYBACK WORKED BUT NO H264 STREAM WAS CAPTURED."
+            "NO H264 STREAM CAPTURED."
         );
 
         return null;
@@ -634,7 +915,7 @@ async function captureStation(browser, station) {
 
     console.log("");
     console.log(
-        "SELECTED STREAM:"
+        "FINAL SELECTED STREAM:"
     );
 
     console.log(
@@ -653,6 +934,7 @@ async function captureStation(browser, station) {
 
 (async () => {
 
+    console.log("");
     console.log(
         "Starting Maspero Stream Finder..."
     );
@@ -704,10 +986,6 @@ async function captureStation(browser, station) {
             );
 
 
-        /* =================================================
-           CAPTURE FAILED
-        ================================================= */
-
         if (!newStream) {
 
             console.log("");
@@ -716,15 +994,15 @@ async function captureStation(browser, station) {
             );
 
 
+            /*
+             * Keep old stream if the new
+             * stream could not be verified.
+             */
+
             if (
                 oldStation &&
                 oldStation.stream
             ) {
-
-                console.log(
-                    "Keeping previous stream."
-                );
-
 
                 outputStations.push({
 
@@ -762,10 +1040,6 @@ async function captureStation(browser, station) {
 
         }
 
-
-        /* =================================================
-           CHECK CHANGE
-        ================================================= */
 
         if (
             !oldStation ||
@@ -809,10 +1083,6 @@ async function captureStation(browser, station) {
     await browser.close();
 
 
-    /* =====================================================
-       NO CHANGES
-    ===================================================== */
-
     if (!changed) {
 
         console.log("");
@@ -828,10 +1098,6 @@ async function captureStation(browser, station) {
 
     }
 
-
-    /* =====================================================
-       WRITE JSON
-    ===================================================== */
 
     const output = {
 
