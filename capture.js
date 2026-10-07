@@ -47,15 +47,9 @@ const STATIONS = [
 // SETTINGS
 // ============================================================
 
-const PREFERRED_QUALITIES = [
-    480,
-    360,
-    240
-];
-
 const PLAY_WAIT = 5000;
 
-const QUALITY_WAIT = 10000;
+const AAC_WAIT = 10000;
 
 const REQUEST_TIMEOUT = 15000;
 
@@ -73,22 +67,6 @@ function sleep(ms){
 }
 
 
-function getQualityFromUrl(url){
-
-    if(!url) return null;
-
-    const match =
-        url.match(
-            /live-h264-(\d+)\.m3u8/i
-        );
-
-    if(!match) return null;
-
-    return Number(match[1]);
-
-}
-
-
 function isM3U8(url){
 
     return (
@@ -99,11 +77,11 @@ function isM3U8(url){
 }
 
 
-function isH264M3U8(url){
+function isAAC128M3U8(url){
 
     return (
         typeof url === "string" &&
-        /live-h264-\d+\.m3u8/i.test(url)
+        /live-aac-128\.m3u8(?:$|\?)/i.test(url)
     );
 
 }
@@ -346,14 +324,14 @@ async function fetchM3U8(page, url){
 
 
 // ============================================================
-// TEST STREAM
+// TEST AAC-128 STREAM
 // ============================================================
 
-async function testStream(page, url, quality){
+async function testAAC128Stream(page, url){
 
     console.log("");
     console.log(
-        `TEST ${quality || "UNKNOWN"}:`
+        "TEST AAC-128:"
     );
 
     console.log(url);
@@ -369,7 +347,7 @@ async function testStream(page, url, quality){
     if(!result.ok){
 
         console.log(
-            `TEST ${quality || "UNKNOWN"}: FAILED`
+            "TEST AAC-128: FAILED"
         );
 
         return {
@@ -378,7 +356,8 @@ async function testStream(page, url, quality){
 
             url,
 
-            quality,
+            quality:
+                "AAC-128",
 
             status:
                 result.status
@@ -402,7 +381,7 @@ async function testStream(page, url, quality){
     if(!isPlaylist){
 
         console.log(
-            `TEST ${quality || "UNKNOWN"}: INVALID M3U8`
+            "TEST AAC-128: INVALID M3U8"
         );
 
         return {
@@ -411,7 +390,8 @@ async function testStream(page, url, quality){
 
             url,
 
-            quality,
+            quality:
+                "AAC-128",
 
             status:
                 result.status
@@ -422,7 +402,7 @@ async function testStream(page, url, quality){
 
 
     console.log(
-        `TEST ${quality || "UNKNOWN"}: OK`
+        "TEST AAC-128: OK"
     );
 
 
@@ -432,443 +412,13 @@ async function testStream(page, url, quality){
 
         url,
 
-        quality,
+        quality:
+            "AAC-128",
 
         status:
             result.status
 
     };
-
-}
-
-
-// ============================================================
-// PARSE MASTER PLAYLIST
-// ============================================================
-
-function parseMasterPlaylist(text, baseUrl){
-
-    if(!text){
-
-        return [];
-
-    }
-
-
-    if(
-        !text.includes(
-            "#EXT-X-STREAM-INF"
-        )
-    ){
-
-        return [];
-
-    }
-
-
-    const lines =
-        text
-            .split(/\r?\n/)
-            .map(
-                line => line.trim()
-            )
-            .filter(Boolean);
-
-
-    const variants = [];
-
-
-    for(let i = 0; i < lines.length; i++){
-
-        const line =
-            lines[i];
-
-
-        if(
-            !line.startsWith(
-                "#EXT-X-STREAM-INF:"
-            )
-        ){
-
-            continue;
-
-        }
-
-
-        const bandwidthMatch =
-            line.match(
-                /BANDWIDTH=(\d+)/i
-            );
-
-
-        const resolutionMatch =
-            line.match(
-                /RESOLUTION=(\d+)x(\d+)/i
-            );
-
-
-        let url = null;
-
-
-        for(
-            let j = i + 1;
-            j < lines.length;
-            j++
-        ){
-
-            if(
-                lines[j].startsWith("#")
-            ){
-
-                continue;
-
-            }
-
-
-            try{
-
-                url =
-                    normalizeUrl(
-                        new URL(
-                            lines[j],
-                            baseUrl
-                        ).href
-                    );
-
-            }catch(error){
-
-                url = null;
-
-            }
-
-
-            break;
-
-        }
-
-
-        if(!url){
-
-            continue;
-
-        }
-
-
-        let quality = null;
-
-
-        if(resolutionMatch){
-
-            quality =
-                Number(
-                    resolutionMatch[2]
-                );
-
-        }
-
-
-        if(!quality){
-
-            quality =
-                getQualityFromUrl(
-                    url
-                );
-
-        }
-
-
-        variants.push({
-
-            quality,
-
-            bandwidth:
-                bandwidthMatch
-                    ?
-                    Number(
-                        bandwidthMatch[1]
-                    )
-                    :
-                    null,
-
-            url
-
-        });
-
-    }
-
-
-    return variants;
-
-}
-
-
-// ============================================================
-// SORT VARIANTS
-// ============================================================
-
-function sortVariants(variants){
-
-    return [...variants].sort(
-        (a,b) => {
-
-            const aq =
-                Number.isFinite(
-                    a.quality
-                )
-                ?
-                a.quality
-                :
-                0;
-
-
-            const bq =
-                Number.isFinite(
-                    b.quality
-                )
-                ?
-                b.quality
-                :
-                0;
-
-
-            return bq - aq;
-
-        }
-    );
-
-}
-
-
-// ============================================================
-// RESOLVE AND VERIFY M3U8
-// ============================================================
-
-async function resolveAndVerifyM3U8(
-    page,
-    url
-){
-
-    console.log("");
-    console.log(
-        "ANALYZING M3U8:"
-    );
-
-    console.log(url);
-
-
-    const fetched =
-        await fetchM3U8(
-            page,
-            url
-        );
-
-
-    if(!fetched.ok){
-
-        console.log(
-            "MASTER FETCH FAILED"
-        );
-
-        return null;
-
-    }
-
-
-    const text =
-        fetched.text;
-
-
-    // ========================================================
-    // MASTER
-    // ========================================================
-
-    if(
-        text.includes(
-            "#EXT-X-STREAM-INF"
-        )
-    ){
-
-        console.log(
-            "MASTER PLAYLIST DETECTED"
-        );
-
-
-        const variants =
-            parseMasterPlaylist(
-                text,
-                url
-            );
-
-
-        console.log(
-            "MASTER VARIANTS:"
-        );
-
-
-        console.log(
-            JSON.stringify(
-                variants,
-                null,
-                2
-            )
-        );
-
-
-        const ordered =
-            sortVariants(
-                variants
-            );
-
-
-        const priority = [];
-
-
-        for(
-            const preferred
-            of PREFERRED_QUALITIES
-        ){
-
-            const matches =
-                ordered.filter(
-                    variant =>
-                        variant.quality ===
-                        preferred
-                );
-
-
-            priority.push(
-                ...matches
-            );
-
-        }
-
-
-        for(
-            const variant
-            of ordered
-        ){
-
-            if(
-                !priority.some(
-                    item =>
-                        item.url ===
-                        variant.url
-                )
-            ){
-
-                priority.push(
-                    variant
-                );
-
-            }
-
-        }
-
-
-        for(
-            const variant
-            of priority
-        ){
-
-            const tested =
-                await testStream(
-                    page,
-                    variant.url,
-                    variant.quality
-                );
-
-
-            if(
-                tested.ok
-            ){
-
-                console.log("");
-                console.log(
-                    "VERIFIED MASTER VARIANT:"
-                );
-
-                console.log(
-                    JSON.stringify(
-                        tested,
-                        null,
-                        2
-                    )
-                );
-
-
-                return {
-
-                    url:
-                        tested.url,
-
-                    quality:
-                        tested.quality,
-
-                    type:
-                        "master-verified"
-
-                };
-
-            }
-
-        }
-
-
-        console.log(
-            "NO MASTER VARIANT PASSED TEST"
-        );
-
-
-        return null;
-
-    }
-
-
-    // ========================================================
-    // DIRECT H264
-    // ========================================================
-
-    if(
-        isH264M3U8(url)
-    ){
-
-        const quality =
-            getQualityFromUrl(
-                url
-            );
-
-
-        const tested =
-            await testStream(
-                page,
-                url,
-                quality
-            );
-
-
-        if(
-            tested.ok
-        ){
-
-            return {
-
-                url:
-                    tested.url,
-
-                quality:
-                    tested.quality,
-
-                type:
-                    "direct-h264-verified"
-
-            };
-
-        }
-
-    }
-
-
-    return null;
 
 }
 
@@ -919,55 +469,77 @@ async function captureStation(page, station){
     const requestHandler =
         request => {
 
-            const url =
-                normalizeUrl(
-                    request.url()
-                );
+            try{
+
+                const url =
+                    normalizeUrl(
+                        request.url()
+                    );
 
 
-            if(!isM3U8(url)){
+                if(!isM3U8(url)){
 
-                return;
-
-            }
-
-
-            const quality =
-                getQualityFromUrl(
-                    url
-                );
-
-
-            console.log("");
-            console.log(
-                "M3U8 REQUESTED BY BROWSER"
-            );
-
-            console.log(url);
-
-
-            if(quality){
-
-                console.log(
-                    `H264 ${quality} REQUESTED`
-                );
-
-            }
-
-
-            captured.set(
-                url,
-                {
-
-                    url,
-
-                    quality,
-
-                    time:
-                        Date.now()
+                    return;
 
                 }
-            );
+
+
+                console.log("");
+                console.log(
+                    "M3U8 REQUESTED BY BROWSER:"
+                );
+
+                console.log(url);
+
+
+                // ------------------------------------------------
+                // AAC-128 TARGET
+                // ------------------------------------------------
+
+                if(
+                    isAAC128M3U8(url)
+                ){
+
+                    console.log("");
+                    console.log(
+                        "******** AAC-128 FOUND ********"
+                    );
+
+                    console.log(
+                        url
+                    );
+
+                    console.log(
+                        "*******************************"
+                    );
+
+
+                    captured.set(
+                        url,
+                        {
+
+                            url,
+
+                            type:
+                                "AAC-128",
+
+                            time:
+                                Date.now()
+
+                        }
+                    );
+
+                }
+
+            }catch(error){
+
+                console.log(
+                    "REQUEST HANDLER ERROR:",
+                    error.message ||
+                    String(error)
+                );
+
+            }
 
         };
 
@@ -994,20 +566,6 @@ async function captureStation(page, station){
                 }
 
 
-                const quality =
-                    getQualityFromUrl(
-                        url
-                    );
-
-
-                if(quality){
-
-                    playbackDetected =
-                        true;
-
-                }
-
-
                 console.log("");
                 console.log(
                     "M3U8 RESPONSE:"
@@ -1020,17 +578,65 @@ async function captureStation(page, station){
 
                 console.log(url);
 
-                if(quality){
+
+                // ------------------------------------------------
+                // AAC-128 RESPONSE
+                // ------------------------------------------------
+
+                if(
+                    isAAC128M3U8(url)
+                ){
+
+                    playbackDetected =
+                        true;
+
+
+                    console.log("");
+                    console.log(
+                        "******** AAC-128 RESPONSE ********"
+                    );
 
                     console.log(
-                        `H264 ${quality} RESPONSE`
+                        "HTTP:",
+                        response.status()
+                    );
+
+                    console.log(
+                        url
+                    );
+
+                    console.log(
+                        "***********************************"
+                    );
+
+
+                    captured.set(
+                        url,
+                        {
+
+                            url,
+
+                            type:
+                                "AAC-128",
+
+                            status:
+                                response.status(),
+
+                            time:
+                                Date.now()
+
+                        }
                     );
 
                 }
 
             }catch(error){
 
-                // Ignore.
+                console.log(
+                    "RESPONSE HANDLER ERROR:",
+                    error.message ||
+                    String(error)
+                );
 
             }
 
@@ -1085,41 +691,6 @@ async function captureStation(page, station){
         await sleep(
             PLAY_WAIT
         );
-
-
-        // =====================================================
-        // INITIAL REQUESTS
-        // =====================================================
-
-        const initialRequests =
-            [...captured.values()];
-
-
-        if(
-            initialRequests.length
-        ){
-
-            console.log("");
-            console.log(
-                "STREAM REQUESTS AFTER OPEN:"
-            );
-
-            console.log(
-                JSON.stringify(
-                    initialRequests,
-                    null,
-                    2
-                )
-            );
-
-        }else{
-
-            console.log("");
-            console.log(
-                "NO M3U8 REQUEST AFTER OPEN"
-            );
-
-        }
 
 
         // =====================================================
@@ -1219,10 +790,7 @@ async function captureStation(page, station){
                 )
             ) ||
             playbackDetected ||
-            initialRequests.some(
-                item =>
-                    item.quality
-            );
+            captured.size > 0;
 
 
         if(
@@ -1274,17 +842,17 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // WAIT FOR REAL BROWSER REQUESTS
+        // WAIT FOR AAC-128
         // =====================================================
 
         console.log("");
         console.log(
-            "WAITING FOR REAL STREAM REQUESTS..."
+            "WAITING FOR AAC-128 REQUEST..."
         );
 
 
         await sleep(
-            QUALITY_WAIT
+            AAC_WAIT
         );
 
 
@@ -1298,7 +866,7 @@ async function captureStation(page, station){
 
         console.log("");
         console.log(
-            "ALL M3U8 REQUESTS:"
+            "AAC-128 STREAM REQUESTS:"
         );
 
 
@@ -1312,10 +880,10 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // DIRECT BROWSER H264 STREAMS
+        // TEST ALL AAC-128 CANDIDATES
         // =====================================================
 
-        const directCandidates = [];
+        const candidates = [];
 
 
         for(
@@ -1324,7 +892,7 @@ async function captureStation(page, station){
         ){
 
             if(
-                !isH264M3U8(
+                !isAAC128M3U8(
                     request.url
                 )
             ){
@@ -1334,22 +902,10 @@ async function captureStation(page, station){
             }
 
 
-            const quality =
-                request.quality;
-
-
-            if(!quality){
-
-                continue;
-
-            }
-
-
             const tested =
-                await testStream(
+                await testAAC128Stream(
                     page,
-                    request.url,
-                    quality
+                    request.url
                 );
 
 
@@ -1357,7 +913,7 @@ async function captureStation(page, station){
                 tested.ok
             ){
 
-                directCandidates.push({
+                candidates.push({
 
                     source:
                         request.url,
@@ -1365,10 +921,14 @@ async function captureStation(page, station){
                     url:
                         request.url,
 
-                    quality,
+                    quality:
+                        "AAC-128",
 
                     type:
-                        "browser-direct-h264"
+                        "browser-direct-aac-128",
+
+                    status:
+                        tested.status
 
                 });
 
@@ -1378,47 +938,47 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // SORT DIRECT CANDIDATES
+        // UNIQUE CANDIDATES
         // =====================================================
 
-        directCandidates.sort(
-            (a,b) => {
-
-                const aq =
-                    Number.isFinite(
-                        a.quality
-                    )
-                    ?
-                    a.quality
-                    :
-                    0;
+        const unique =
+            new Map();
 
 
-                const bq =
-                    Number.isFinite(
-                        b.quality
-                    )
-                    ?
-                    b.quality
-                    :
-                    0;
+        for(
+            const candidate
+            of candidates
+        ){
 
+            if(
+                !unique.has(
+                    candidate.url
+                )
+            ){
 
-                return bq - aq;
+                unique.set(
+                    candidate.url,
+                    candidate
+                );
 
             }
-        );
+
+        }
+
+
+        const finalCandidates =
+            [...unique.values()];
 
 
         console.log("");
         console.log(
-            "VERIFIED BROWSER H264 STREAMS:"
+            "VERIFIED AAC-128 STREAMS:"
         );
 
 
         console.log(
             JSON.stringify(
-                directCandidates,
+                finalCandidates,
                 null,
                 2
             )
@@ -1426,196 +986,12 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // SELECT BROWSER STREAM
+        // SELECT AAC-128
         // =====================================================
 
-        let selected =
+        const selected =
+            finalCandidates[0] ||
             null;
-
-
-        for(
-            const preferred
-            of PREFERRED_QUALITIES
-        ){
-
-            selected =
-                directCandidates.find(
-                    candidate =>
-                        candidate.quality ===
-                        preferred
-                );
-
-
-            if(selected){
-
-                break;
-
-            }
-
-        }
-
-
-        // =====================================================
-        // FALLBACK TO MASTER ANALYSIS
-        // =====================================================
-
-        if(!selected){
-
-            console.log("");
-            console.log(
-                "NO DIRECT BROWSER H264 SELECTED"
-            );
-
-            console.log(
-                "FALLING BACK TO M3U8 ANALYSIS..."
-            );
-
-
-            const candidates = [];
-
-
-            for(
-                const request
-                of requests
-            ){
-
-                if(
-                    !isM3U8(
-                        request.url
-                    )
-                ){
-
-                    continue;
-
-                }
-
-
-                const resolved =
-                    await resolveAndVerifyM3U8(
-                        page,
-                        request.url
-                    );
-
-
-                if(
-                    resolved &&
-                    resolved.url
-                ){
-
-                    candidates.push({
-
-                        source:
-                            request.url,
-
-                        url:
-                            resolved.url,
-
-                        quality:
-                            resolved.quality,
-
-                        type:
-                            resolved.type
-
-                    });
-
-                }
-
-            }
-
-
-            // -------------------------------------------------
-            // UNIQUE
-            // -------------------------------------------------
-
-            const unique =
-                new Map();
-
-
-            for(
-                const candidate
-                of candidates
-            ){
-
-                if(
-                    !unique.has(
-                        candidate.url
-                    )
-                ){
-
-                    unique.set(
-                        candidate.url,
-                        candidate
-                    );
-
-                }
-
-            }
-
-
-            const finalCandidates =
-                [...unique.values()];
-
-
-            finalCandidates.sort(
-                (a,b) => {
-
-                    const aq =
-                        Number.isFinite(
-                            a.quality
-                        )
-                        ?
-                        a.quality
-                        :
-                        0;
-
-
-                    const bq =
-                        Number.isFinite(
-                            b.quality
-                        )
-                        ?
-                        b.quality
-                        :
-                        0;
-
-
-                    return bq - aq;
-
-                }
-            );
-
-
-            for(
-                const preferred
-                of PREFERRED_QUALITIES
-            ){
-
-                selected =
-                    finalCandidates.find(
-                        candidate =>
-                            candidate.quality ===
-                            preferred
-                    );
-
-
-                if(selected){
-
-                    break;
-
-                }
-
-            }
-
-
-            if(!selected){
-
-                selected =
-                    finalCandidates[0] ||
-                    null;
-
-            }
-
-        }
 
 
         // =====================================================
@@ -1626,7 +1002,15 @@ async function captureStation(page, station){
 
             console.log("");
             console.log(
-                "NO VERIFIED STREAM FOUND"
+                "NO AAC-128 STREAM FOUND"
+            );
+
+            console.log(
+                "SEARCH FOR THIS STATION FAILED:"
+            );
+
+            console.log(
+                station.name
             );
 
             return null;
@@ -1644,12 +1028,7 @@ async function captureStation(page, station){
         );
 
         console.log(
-            "SELECTED:",
-            selected.quality
-                ?
-                `H264 ${selected.quality}`
-                :
-                "UNKNOWN"
+            "SELECTED: AAC-128"
         );
 
         console.log(
@@ -1658,7 +1037,7 @@ async function captureStation(page, station){
         );
 
         console.log(
-            "FINAL VERIFIED STREAM:"
+            "FINAL VERIFIED AAC-128 STREAM:"
         );
 
         console.log(
@@ -1679,7 +1058,7 @@ async function captureStation(page, station){
                 selected.url,
 
             quality:
-                selected.quality
+                "AAC-128"
 
         };
 
@@ -1723,17 +1102,27 @@ async function main(){
     );
 
     console.log(
-        "Mode: BROWSER M3U8 + REAL STREAM VERIFICATION"
+        "Mode: BROWSER M3U8 + AAC-128 SEARCH"
     );
 
     console.log(
-        "Priority: 480 > 360 > 240"
+        "Target: live-aac-128.m3u8"
     );
 
     console.log(
         "Playback: AUTOPLAY FIRST -> PLAY ONLY IF NEEDED"
     );
 
+    console.log("");
+    console.log(
+        "========================================"
+    );
+    console.log(
+        "SEARCHING AAC-128 FOR ALL MASPERO STATIONS"
+    );
+    console.log(
+        "========================================"
+    );
     console.log("");
 
 
@@ -1781,6 +1170,33 @@ async function main(){
         );
 
     }
+
+
+    // ========================================================
+    // FRESH RESULTS
+    // ========================================================
+
+    console.log("");
+    console.log(
+        "========================================"
+    );
+
+    console.log(
+        "FRESH AAC-128 RESULTS"
+    );
+
+    console.log(
+        "========================================"
+    );
+
+
+    console.log(
+        JSON.stringify(
+            freshResults,
+            null,
+            2
+        )
+    );
 
 
     // ========================================================
@@ -1872,7 +1288,7 @@ async function main(){
                             fresh.url,
 
                         quality:
-                            fresh.quality,
+                            "AAC-128",
 
                         verified:
                             true
@@ -1953,10 +1369,15 @@ async function main(){
     );
 
     console.log(
+        "AAC-128 SEARCH COMPLETE"
+    );
+
+    console.log(
         "========================================"
     );
 
     console.log("");
+
 
     await browser.close();
 
