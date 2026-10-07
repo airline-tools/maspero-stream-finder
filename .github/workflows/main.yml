@@ -1,22 +1,33 @@
 name: Maspero Stream Finder
 
 on:
+
   workflow_dispatch:
+
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 * * * *"
+
 
 jobs:
+
   capture:
+
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
+
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
 
       - name: Install Playwright
         run: |
@@ -24,5 +35,41 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      - name: Capture Maspero Stream
+
+      - name: Capture Maspero Streams
         run: node capture.js
+
+
+      - name: Check Changes
+        id: changes
+        run: |
+
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+
+      - name: Commit JSON
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add maspero-streams.json
+
+          git commit -m "Update Maspero streams"
+
+          git push
+
+
+      - name: No Changes
+        if: steps.changes.outputs.changed == 'false'
+        run: |
+
+          echo "No changes detected."
+
+          echo "Nothing to commit."
