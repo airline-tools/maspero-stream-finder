@@ -1,10 +1,10 @@
 {
-    "updated": "2026-10-07T13:41:53.612Z",
+    "updated": "2026-10-07T14:01:17.644Z",
     "stations": [
         {
             "name": "راديو مصر",
             "frequency": "88.7 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(w3rFbKhe_j3Ks1Eq-wgditLU0NbAg_KghoVLUm5KoqATHzXkyUL8p5IPMPsRKq91ANrFdEful7AMT77nZd4c_srDVi_YyQbVkOg6xNV7vHsMQeJlcfA6igcf-zHs3FXDsAdsnb-r7P5pa3fuqj-xK4gZ3NpcW_bjv8NaK6S7muq_gm9N_f76qfCh88OLhND6)/dm/4/x8n6dpk/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(S3xxaYQeHTMlp2_91Bn9vkjHAuYIlI9BcMmut7SGYBnLi5MV-zauj_bVWaIWOSRzyrUcK4cX2q40WFlxD54EFpGwMAs7hPGw3d-CxwSZw4nTZu4-mbaSSCnAh8_zaUt2358wv4g4a3DUcMkp6kbJXIo58bmtqWFCuNcpVsJqR58_P0TahztfnrLOxa_c4-Sc)/dm/4/x8n6dpk/live-h264-240.m3u8"
         },
         {
             "name": "الشرق الأوسط",
@@ -14,12 +14,12 @@
         {
             "name": "البرنامج الثقافي ودراما FM",
             "frequency": "91.5 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(6Sl7f5yW59hl26M3QnsdL1uGumNoKBlecHXf2NzNQrHagl5UCVJDg5wQKC6i3BPWYpXqSkBl3fLJjYQtE4SRXBVFXxSq9BCsPqC_rq_-zz5auiWBJHyTJPSL4AXXKV2ilPzcS_H4FPcHwTL0I7oi7WSDvEMO8tTyHrQPUtyc6nCMkMT45W2fhafTiViYF8cn)/dm/4/x8n6eci/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(nNB8BjypbMbpJwXIa5tAler2AILeqLSEx8bHpkm8RYWHfG5tZh8ScyAFcQZ0fMJel9oK10ZqEhruRt3UrWfsh7cBA48uFeTaYZdKzK9XrRRfekBc0e8uahQevnjCertrEEFQ09Ymdd7Bp1eBhktDHc4kcTHExfMH39Y9erq9ofufyVPLC-SRpKXtlrjymMH5)/dm/4/x8n6eci/live-h264-240.m3u8"
         },
         {
             "name": "إذاعة القاهرة الكبرى",
             "frequency": "102.2 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(Te5ez9J14i7nJbL9rgpt5laO4tacu3tIpcHk-AfMSSuEQC2QEG-EeoKs4UQEM1c_W6JC4TIrn7fos87SuJzGnk5wWKYgDjO9xxUnKY2Vae6Wtz0m-_qJ5-sPgrWWc4MOITcxe7S619qFSpQNBhmcxbQDQePa2k2vMzttG3X0m0WWLCUMPNXogJ2pLvMdiYEJ)/dm/4/x8n6ebs/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(1VKiw6_UYDkjvz2hYc_UavEXqegRjRRKO4DF96LqS4pzwoa-Y7yUbFIgMnZp2q-2arIlk9jqoVj-i8bZwHBHgzAxq-jDpIUcdUrcrodgWc657CkcK__asPyUxziRP_RvJ2ztr1xnAvRqdu0yR21jeHAuFfm_jQi7J0Go3XOnjxrYMZJLUdmgD5ZLmqbFiT5T)/dm/4/x8n6ebs/live-h264-240.m3u8"
         },
         {
             "name": "الأغاني",
@@ -34,7 +34,7 @@
         {
             "name": "الشباب والرياضة",
             "frequency": "108 FM",
-            "stream": "https://live.eu-north-1a.cf.dmcdn.net/sec2(G49ZxJXS8GEvBO7FCiZIH1js3a9P1y8Qv6u-uTfBxDobbxxsvtxSllli7aR122OkTjS7BvJwv-b-dTPUMVtoCDrrYslDma5YN9aqY-hQqMDXvYfHkUixNdgc9HD3J-UWVg6tJu3nY08WAOEZkp4H60ABazXu30PwIQS-cFec6mYNp30AsytBr_0THQi1ezPw)/dm/4/x8n6dzo/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1a.cf.dmcdn.net/sec2(t6hcxCO3TV2PvjeR5eSom2Jn-anZxMepognPCBdDdL5q-roCzm4cc2mO7co6agzg_GkY647pVBg05PJihwvMFYd2cNfU9ZoSAnVVJKZB3Vj0l5kQbZ53h2PTF5M2VkYUnYK4eCpMEZdWBLdFlwWD_iF1OLRo6LudSmBUqzfYoH552KBy0p8imOg5t1ePi2zr)/dm/4/x8n6dzo/live-h264-240.m3u8"
         }
     ]
 }
