@@ -1,11 +1,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const MASPERO_URL =
-    "https://www.maspero.eg/stream/";
-
-const OUTPUT_FILE =
-    "maspero-streams.json";
+const OUTPUT_FILE = "maspero-streams.json";
 
 const STATIONS = [
 
@@ -46,11 +42,22 @@ const STATIONS = [
 
 ];
 
-console.log("");
-console.log("Starting Maspero Stream Finder...");
-console.log("Quality detection: AFTER SECOND PLAY");
-console.log("Priority: 480 > 360 > 240");
-console.log("");
+
+// ============================================================
+// SETTINGS
+// ============================================================
+
+const PREFERRED_QUALITIES = [
+    480,
+    360,
+    240
+];
+
+const PLAY_WAIT = 5000;
+
+const QUALITY_WAIT = 15000;
+
+const REQUEST_TIMEOUT = 15000;
 
 
 // ============================================================
@@ -66,7 +73,7 @@ function sleep(ms){
 }
 
 
-function getQuality(url){
+function getQualityFromUrl(url){
 
     if(!url) return null;
 
@@ -81,6 +88,41 @@ function getQuality(url){
 
 }
 
+
+function isM3U8(url){
+
+    return (
+        typeof url === "string" &&
+        /\.m3u8(?:$|\?)/i.test(url)
+    );
+
+}
+
+
+function isH264M3U8(url){
+
+    return (
+        typeof url === "string" &&
+        /live-h264-\d+\.m3u8/i.test(url)
+    );
+
+}
+
+
+function normalizeUrl(url){
+
+    if(!url) return null;
+
+    return url
+        .replace(/&amp;/g, "&")
+        .trim();
+
+}
+
+
+// ============================================================
+// DAILYMOTION FRAME
+// ============================================================
 
 function getDailymotionFrame(page){
 
@@ -100,7 +142,7 @@ function getDailymotionFrame(page){
 // PLAY
 // ============================================================
 
-async function clickRealPlayButton(page){
+async function clickPlay(page){
 
     const frame =
         getDailymotionFrame(page);
@@ -118,16 +160,17 @@ async function clickRealPlayButton(page){
 
     const selectors = [
 
+        'button[aria-label="Play"]',
+
         'button[aria-label*="Play" i]',
+
         'button[title*="Play" i]',
 
-        '[aria-label*="Play video" i]',
-        '[title*="Play video" i]',
+        '.playback_button',
 
-        'button[aria-label*="تشغيل" i]',
-        'button[title*="تشغيل" i]',
+        '.playback_button.video_button_icon',
 
-        '.dmp_PlaybackControlsButton[aria-label*="Play" i]'
+        'button[aria-label*="تشغيل" i]'
 
     ];
 
@@ -141,7 +184,9 @@ async function clickRealPlayButton(page){
 
             if(
                 await button.count() &&
-                await button.isVisible().catch(()=>false)
+                await button.isVisible().catch(
+                    ()=>false
+                )
             ){
 
                 await button.click({
@@ -159,14 +204,14 @@ async function clickRealPlayButton(page){
 
         }catch(error){
 
-            // Try next selector.
+            // Continue.
 
         }
 
     }
 
 
-    // Fallback: click video itself.
+    // Fallback: click the video.
 
     try{
 
@@ -176,10 +221,6 @@ async function clickRealPlayButton(page){
         if(await video.count()){
 
             await video.click({
-                position:{
-                    x:200,
-                    y:100
-                },
                 force:true
             });
 
@@ -208,147 +249,6 @@ async function clickRealPlayButton(page){
 
 
 // ============================================================
-// STOP
-// ============================================================
-
-async function stopPlayer(page){
-
-    console.log("");
-    console.log("STOP...");
-
-
-    const frame =
-        getDailymotionFrame(page);
-
-    if(!frame){
-
-        console.log(
-            "STOP: DAILYMOTION FRAME NOT FOUND"
-        );
-
-        return false;
-
-    }
-
-
-    const pauseSelectors = [
-
-        'button[aria-label*="Pause" i]',
-        'button[title*="Pause" i]',
-
-        '[aria-label*="Pause video" i]',
-        '[title*="Pause video" i]',
-
-        'button[aria-label*="إيقاف" i]',
-        'button[aria-label*="إيقاف مؤقت" i]',
-        'button[title*="إيقاف" i]',
-
-        '.dmp_PlaybackControlsButton[aria-label*="Pause" i]'
-
-    ];
-
-
-    for(const selector of pauseSelectors){
-
-        try{
-
-            const button =
-                frame.locator(selector).first();
-
-            if(
-                await button.count() &&
-                await button.isVisible().catch(()=>false)
-            ){
-
-                await button.click({
-                    force:true
-                });
-
-                console.log(
-                    "STOP CLICKED:",
-                    selector
-                );
-
-                await sleep(1500);
-
-                return true;
-
-            }
-
-        }catch(error){
-
-            // Try next selector.
-
-        }
-
-    }
-
-
-    // ========================================================
-    // FALLBACK
-    // ========================================================
-
-    console.log(
-        "STOP BUTTON NOT FOUND - TRYING MEDIA PAUSE"
-    );
-
-
-    try{
-
-        const paused =
-            await frame
-                .locator("video, audio")
-                .evaluateAll(
-                    elements => {
-
-                        let changed = false;
-
-                        elements.forEach(
-                            media => {
-
-                                if(!media.paused){
-
-                                    media.pause();
-
-                                    changed = true;
-
-                                }
-
-                            }
-                        );
-
-                        return changed;
-
-                    }
-                );
-
-
-        console.log(
-            "MEDIA PAUSE RESULT:",
-            paused
-        );
-
-
-        await sleep(1500);
-
-        return paused;
-
-    }catch(error){
-
-        console.log(
-            "MEDIA PAUSE ERROR:",
-            error.message ||
-            String(error)
-        );
-
-        return false;
-
-    }
-
-}
-
-
-// ============================================================
 // VERIFY PLAYBACK
 // ============================================================
 
@@ -359,16 +259,12 @@ async function verifyPlayback(page){
 
     if(!frame){
 
-        console.log(
-            "PLAYBACK NOT CONFIRMED: FRAME NOT FOUND"
-        );
-
         return false;
 
     }
 
 
-    for(let i = 0; i < 12; i++){
+    for(let i = 0; i < 10; i++){
 
         try{
 
@@ -376,9 +272,8 @@ async function verifyPlayback(page){
                 await frame
                     .locator("video, audio")
                     .evaluateAll(
-                        elements => {
-
-                            return elements.map(
+                        elements =>
+                            elements.map(
                                 media => ({
                                     paused:
                                         media.paused,
@@ -387,14 +282,9 @@ async function verifyPlayback(page){
                                         media.readyState,
 
                                     currentTime:
-                                        media.currentTime,
-
-                                    duration:
-                                        media.duration
+                                        media.currentTime
                                 })
-                            );
-
-                        }
+                            )
                     );
 
 
@@ -419,7 +309,7 @@ async function verifyPlayback(page){
 
         }catch(error){
 
-            // Continue checking.
+            // Continue.
 
         }
 
@@ -439,85 +329,968 @@ async function verifyPlayback(page){
 
 
 // ============================================================
-// DIAGNOSTIC: DAILYMOTION BUTTONS
+// FETCH M3U8
 // ============================================================
 
-async function logDailymotionButtons(page){
+async function fetchM3U8(page, url){
 
-    const frame =
-        getDailymotionFrame(page);
+    try{
 
-    if(!frame){
+        const response =
+            await page.request.get(
+                url,
+                {
+                    timeout:REQUEST_TIMEOUT,
+                    failOnStatusCode:false
+                }
+            );
+
+
+        const status =
+            response.status();
+
+
+        if(status < 200 || status >= 300){
+
+            console.log(
+                "M3U8 HTTP:",
+                status
+            );
+
+            return null;
+
+        }
+
+
+        const text =
+            await response.text();
+
+
+        return text;
+
+    }catch(error){
 
         console.log(
-            "DAILYMOTION BUTTONS: FRAME NOT FOUND"
+            "M3U8 FETCH ERROR:",
+            error.message ||
+            String(error)
         );
 
-        return;
+        return null;
+
+    }
+
+}
+
+
+// ============================================================
+// PARSE MASTER PLAYLIST
+// ============================================================
+
+function parseMasterPlaylist(text, baseUrl){
+
+    if(!text){
+
+        return [];
 
     }
 
 
-    try{
+    if(
+        !text.includes("#EXT-X-STREAM-INF")
+    ){
 
-        const buttons =
-            await frame
-                .locator("button")
-                .evaluateAll(
-                    elements =>
-                        elements.map(
-                            (element,index) => ({
-                                index,
+        return [];
 
-                                text:
-                                    (
-                                        element.innerText ||
-                                        ""
-                                    ).trim(),
+    }
 
-                                aria:
-                                    element.getAttribute(
-                                        "aria-label"
-                                    ) || "",
 
-                                title:
-                                    element.getAttribute(
-                                        "title"
-                                    ) || "",
+    const lines =
+        text
+            .split(/\r?\n/)
+            .map(
+                line => line.trim()
+            )
+            .filter(Boolean);
 
-                                cls:
-                                    typeof element.className ===
-                                    "string"
-                                        ?
-                                        element.className
-                                        :
-                                        ""
-                            })
-                        )
+
+    const variants = [];
+
+
+    for(let i = 0; i < lines.length; i++){
+
+        const line =
+            lines[i];
+
+
+        if(
+            !line.startsWith(
+                "#EXT-X-STREAM-INF:"
+            )
+        ){
+
+            continue;
+
+        }
+
+
+        const bandwidthMatch =
+            line.match(
+                /BANDWIDTH=(\d+)/i
+            );
+
+
+        const resolutionMatch =
+            line.match(
+                /RESOLUTION=(\d+)x(\d+)/i
+            );
+
+
+        let url = null;
+
+
+        for(
+            let j = i + 1;
+            j < lines.length;
+            j++
+        ){
+
+            if(
+                lines[j].startsWith("#")
+            ){
+
+                continue;
+
+            }
+
+
+            url =
+                new URL(
+                    lines[j],
+                    baseUrl
+                ).href;
+
+            break;
+
+        }
+
+
+        if(!url){
+
+            continue;
+
+        }
+
+
+        let quality = null;
+
+
+        if(resolutionMatch){
+
+            quality =
+                Number(
+                    resolutionMatch[2]
                 );
 
+        }
 
-        console.log("");
-        console.log(
-            "DAILYMOTION BUTTONS AFTER PLAY:"
+
+        variants.push({
+
+            quality,
+
+            bandwidth:
+                bandwidthMatch
+                    ?
+                    Number(
+                        bandwidthMatch[1]
+                    )
+                    :
+                    null,
+
+            url
+
+        });
+
+    }
+
+
+    return variants;
+
+}
+
+
+// ============================================================
+// FIND BEST VARIANT
+// ============================================================
+
+function selectBestVariant(variants){
+
+    if(!variants.length){
+
+        return null;
+
+    }
+
+
+    // First: exact preferred qualities.
+
+    for(
+        const preferred
+        of PREFERRED_QUALITIES
+    ){
+
+        const found =
+            variants.find(
+                variant =>
+                    variant.quality ===
+                    preferred
+            );
+
+
+        if(found){
+
+            return found;
+
+        }
+
+    }
+
+
+    // Otherwise choose highest known
+    // resolution.
+
+    const known =
+        variants
+            .filter(
+                variant =>
+                    Number.isFinite(
+                        variant.quality
+                    )
+            )
+            .sort(
+                (a,b) =>
+                    b.quality -
+                    a.quality
+            );
+
+
+    if(known.length){
+
+        return known[0];
+
+    }
+
+
+    // If resolution isn't exposed,
+    // use highest bandwidth.
+
+    const byBandwidth =
+        variants
+            .filter(
+                variant =>
+                    Number.isFinite(
+                        variant.bandwidth
+                    )
+            )
+            .sort(
+                (a,b) =>
+                    b.bandwidth -
+                    a.bandwidth
+            );
+
+
+    if(byBandwidth.length){
+
+        return byBandwidth[0];
+
+    }
+
+
+    return variants[0];
+
+}
+
+
+// ============================================================
+// RESOLVE M3U8
+// ============================================================
+
+async function resolveM3U8(page, url){
+
+    const text =
+        await fetchM3U8(
+            page,
+            url
         );
+
+
+    if(!text){
+
+        return {
+
+            type:"unavailable",
+
+            url:null,
+
+            quality:null
+
+        };
+
+    }
+
+
+    // Master playlist.
+
+    if(
+        text.includes(
+            "#EXT-X-STREAM-INF"
+        )
+    ){
+
+        console.log(
+            "MASTER PLAYLIST DETECTED"
+        );
+
+
+        const variants =
+            parseMasterPlaylist(
+                text,
+                url
+            );
+
+
+        console.log(
+            "MASTER VARIANTS:"
+        );
+
 
         console.log(
             JSON.stringify(
-                buttons,
+                variants,
                 null,
                 2
             )
         );
 
+
+        const best =
+            selectBestVariant(
+                variants
+            );
+
+
+        if(best){
+
+            return {
+
+                type:"master",
+
+                url:
+                    best.url,
+
+                quality:
+                    best.quality,
+
+                variants
+
+            };
+
+        }
+
+    }
+
+
+    // Direct H264 playlist.
+
+    const quality =
+        getQualityFromUrl(
+            url
+        );
+
+
+    if(quality){
+
+        return {
+
+            type:"direct",
+
+            url,
+
+            quality
+
+        };
+
+    }
+
+
+    return {
+
+        type:"unknown",
+
+        url,
+
+        quality:null
+
+    };
+
+}
+
+
+// ============================================================
+// CAPTURE ONE STATION
+// ============================================================
+
+async function captureStation(page, station){
+
+    console.log("");
+    console.log(
+        "========================================"
+    );
+
+    console.log(
+        "OPENING:",
+        station.name
+    );
+
+    console.log(
+        station.url
+    );
+
+    console.log(
+        "========================================"
+    );
+
+    console.log("");
+
+
+    const captured = new Map();
+
+
+    let playbackStartedAt = 0;
+
+
+    const requestHandler =
+        request => {
+
+            const url =
+                normalizeUrl(
+                    request.url()
+                );
+
+
+            if(!isM3U8(url)){
+
+                return;
+
+            }
+
+
+            const quality =
+                getQualityFromUrl(
+                    url
+                );
+
+
+            console.log("");
+            console.log(
+                "M3U8 REQUESTED"
+            );
+
+            console.log(url);
+
+
+            if(quality){
+
+                console.log(
+                    `H264 ${quality} REQUESTED`
+                );
+
+            }
+
+
+            captured.set(
+                url,
+                {
+                    url,
+
+                    quality,
+
+                    time:
+                        Date.now(),
+
+                    afterPlayback:
+                        playbackStartedAt > 0
+                        &&
+                        Date.now() >=
+                        playbackStartedAt
+                }
+            );
+
+        };
+
+
+    page.on(
+        "request",
+        requestHandler
+    );
+
+
+    try{
+
+        // =====================================================
+        // OPEN
+        // =====================================================
+
+        await page.goto(
+            station.url,
+            {
+                waitUntil:
+                    "domcontentloaded",
+
+                timeout:
+                    60000
+            }
+        );
+
+
+        console.log(
+            "PAGE LOADED"
+        );
+
+
+        await sleep(
+            PLAY_WAIT
+        );
+
+
+        // =====================================================
+        // PLAY
+        // =====================================================
+
         console.log("");
+        console.log(
+            "STARTING PLAYBACK..."
+        );
+
+
+        const clicked =
+            await clickPlay(page);
+
+
+        if(!clicked){
+
+            console.log(
+                "COULD NOT CLICK PLAY"
+            );
+
+            return null;
+
+        }
+
+
+        // =====================================================
+        // WAIT
+        // =====================================================
+
+        await sleep(3000);
+
+
+        const playing =
+            await verifyPlayback(page);
+
+
+        if(playing){
+
+            playbackStartedAt =
+                Date.now();
+
+            console.log(
+                "PLAYBACK START TIME RECORDED"
+            );
+
+        }else{
+
+            console.log(
+                "PLAYBACK COULD NOT BE VERIFIED"
+            );
+
+            // We still keep monitoring because
+            // Dailymotion may delay media startup.
+
+        }
+
+
+        // =====================================================
+        // ALLOW QUALITY SELECTION
+        // =====================================================
+
+        console.log("");
+        console.log(
+            "WAITING FOR M3U8 / QUALITY..."
+        );
+
+
+        await sleep(
+            QUALITY_WAIT
+        );
+
+
+        // =====================================================
+        // SNAPSHOT
+        // =====================================================
+
+        const requests =
+            [...captured.values()];
+
+
+        console.log("");
+        console.log(
+            "ALL M3U8 REQUESTS:"
+        );
+
+
+        console.log(
+            JSON.stringify(
+                requests,
+                null,
+                2
+            )
+        );
+
+
+        // =====================================================
+        // TRY TO RESOLVE MASTERS
+        // =====================================================
+
+        const candidates = [];
+
+
+        for(
+            const request
+            of requests
+        ){
+
+            if(
+                !request.afterPlayback
+            ){
+
+                continue;
+
+            }
+
+
+            if(
+                !isM3U8(
+                    request.url
+                )
+            ){
+
+                continue;
+
+            }
+
+
+            console.log("");
+            console.log(
+                "ANALYZING M3U8:"
+            );
+
+            console.log(
+                request.url
+            );
+
+
+            const resolved =
+                await resolveM3U8(
+                    page,
+                    request.url
+                );
+
+
+            if(
+                resolved &&
+                resolved.url
+            ){
+
+                candidates.push({
+
+                    source:
+                        request.url,
+
+                    url:
+                        resolved.url,
+
+                    quality:
+                        resolved.quality,
+
+                    type:
+                        resolved.type
+
+                });
+
+            }
+
+        }
+
+
+        // =====================================================
+        // DIRECT H264 REQUESTS
+        // =====================================================
+
+        for(
+            const request
+            of requests
+        ){
+
+            if(
+                !request.afterPlayback
+            ){
+
+                continue;
+
+            }
+
+
+            if(
+                !isH264M3U8(
+                    request.url
+                )
+            ){
+
+                continue;
+
+            }
+
+
+            const quality =
+                request.quality;
+
+
+            if(!quality){
+
+                continue;
+
+            }
+
+
+            candidates.push({
+
+                source:
+                    request.url,
+
+                url:
+                    request.url,
+
+                quality,
+
+                type:
+                    "direct-h264"
+
+            });
+
+        }
+
+
+        // =====================================================
+        // REMOVE DUPLICATES
+        // =====================================================
+
+        const unique =
+            new Map();
+
+
+        for(
+            const candidate
+            of candidates
+        ){
+
+            const key =
+                candidate.url;
+
+
+            if(
+                !unique.has(key)
+            ){
+
+                unique.set(
+                    key,
+                    candidate
+                );
+
+            }
+
+        }
+
+
+        const finalCandidates =
+            [...unique.values()];
+
+
+        // =====================================================
+        // SORT
+        // =====================================================
+
+        finalCandidates.sort(
+            (a,b) => {
+
+                const aq =
+                    Number.isFinite(
+                        a.quality
+                    )
+                    ?
+                    a.quality
+                    :
+                    0;
+
+
+                const bq =
+                    Number.isFinite(
+                        b.quality
+                    )
+                    ?
+                    b.quality
+                    :
+                    0;
+
+
+                return bq - aq;
+
+            }
+        );
+
+
+        console.log("");
+        console.log(
+            "AVAILABLE VERIFIED CANDIDATES:"
+        );
+
+
+        console.log(
+            JSON.stringify(
+                finalCandidates,
+                null,
+                2
+            )
+        );
+
+
+        // =====================================================
+        // PREFERRED QUALITY
+        // =====================================================
+
+        let selected = null;
+
+
+        for(
+            const preferred
+            of PREFERRED_QUALITIES
+        ){
+
+            selected =
+                finalCandidates.find(
+                    candidate =>
+                        candidate.quality ===
+                        preferred
+                );
+
+
+            if(selected){
+
+                break;
+
+            }
+
+        }
+
+
+        // Fallback highest known quality.
+
+        if(!selected){
+
+            selected =
+                finalCandidates.find(
+                    candidate =>
+                        Number.isFinite(
+                            candidate.quality
+                        )
+                );
+
+        }
+
+
+        if(!selected){
+
+            console.log("");
+            console.log(
+                "NO VERIFIED STREAM FOUND"
+            );
+
+            return null;
+
+        }
+
+
+        // =====================================================
+        // FINAL
+        // =====================================================
+
+        console.log("");
+        console.log(
+            "========================================"
+        );
+
+        console.log(
+            "SELECTED:",
+            selected.quality
+                ?
+                `H264 ${selected.quality}`
+                :
+                "UNKNOWN"
+        );
+
+        console.log(
+            "FINAL STREAM:"
+        );
+
+        console.log(
+            selected.url
+        );
+
+        console.log(
+            "========================================"
+        );
+
+
+        return {
+
+            name:
+                station.name,
+
+            url:
+                selected.url,
+
+            quality:
+                selected.quality
+
+        };
 
     }catch(error){
 
+        console.log("");
         console.log(
-            "BUTTON DIAGNOSTIC ERROR:",
+            "STATION ERROR:",
             error.message ||
             String(error)
+        );
+
+        return null;
+
+    }finally{
+
+        page.off(
+            "request",
+            requestHandler
         );
 
     }
@@ -531,6 +1304,22 @@ async function logDailymotionButtons(page){
 
 async function main(){
 
+    console.log("");
+    console.log(
+        "Starting Maspero Stream Finder..."
+    );
+
+    console.log(
+        "Mode: PLAY + M3U8 MASTER ANALYSIS"
+    );
+
+    console.log(
+        "Priority: 480 > 360 > 240"
+    );
+
+    console.log("");
+
+
     const browser =
         await chromium.launch({
             headless:true
@@ -541,405 +1330,28 @@ async function main(){
         await browser.newPage();
 
 
-    const results = [];
+    const freshResults = [];
 
 
-    for(const station of STATIONS){
+    for(
+        const station
+        of STATIONS
+    ){
 
-        console.log("");
-        console.log(
-            "========================================"
-        );
-
-        console.log(
-            "OPENING:",
-            station.name
-        );
-
-        console.log(
-            station.url
-        );
-
-        console.log(
-            "========================================"
-        );
-
-        console.log("");
-
-
-        const streams = [];
-
-
-        // ====================================================
-        // CAPTURE REQUESTS
-        // ====================================================
-
-        const requestHandler =
-            request => {
-
-                const url =
-                    request.url();
-
-
-                if(
-                    !/live-h264-\d+\.m3u8/i
-                        .test(url)
-                ){
-
-                    return;
-
-                }
-
-
-                const quality =
-                    getQuality(url);
-
-
-                if(!quality){
-
-                    return;
-
-                }
-
-
-                console.log(
-                    `H264 ${quality} REQUESTED`
-                );
-
-                console.log(url);
-
-
-                streams.push({
-
-                    quality,
-
-                    url,
-
-                    time:Date.now()
-
-                });
-
-            };
-
-
-        page.on(
-            "request",
-            requestHandler
-        );
-
-
-        try{
-
-            // =================================================
-            // OPEN PAGE
-            // =================================================
-
-            await page.goto(
-                station.url,
-                {
-                    waitUntil:"domcontentloaded",
-                    timeout:60000
-                }
+        const result =
+            await captureStation(
+                page,
+                station
             );
 
 
-            console.log(
-                "PAGE LOADED"
+        if(result){
+
+            freshResults.push(
+                result
             );
-
-
-            await sleep(5000);
-
-
-            // =================================================
-            // FIRST PLAY
-            // =================================================
-
-            console.log("");
-            console.log(
-                "FIRST PLAY..."
-            );
-
-
-            await clickRealPlayButton(page);
-
-
-            await sleep(3000);
-
-
-            await verifyPlayback(page);
-
-
-            // =================================================
-            // DIAGNOSTIC BUTTON LIST
-            // =================================================
-
-            await logDailymotionButtons(page);
-
-
-            // =================================================
-            // STOP
-            // =================================================
-
-            const stopped =
-                await stopPlayer(page);
-
-
-            console.log(
-                "STOP RESULT:",
-                stopped
-            );
-
-
-            await sleep(2500);
-
-
-            // =================================================
-            // SECOND PLAY
-            // =================================================
-
-            console.log("");
-            console.log(
-                "========================================"
-            );
-
-            console.log(
-                "SECOND PLAY STARTING"
-            );
-
-            console.log(
-                "Streams before this point will be ignored."
-            );
-
-            console.log(
-                "========================================"
-            );
-
-            console.log("");
-
-
-            // Important:
-            // Ignore every request captured before
-            // the second Play.
-
-            streams.length = 0;
-
-
-            const secondPlayTime =
-                Date.now();
-
-
-            await clickRealPlayButton(page);
-
-
-            const playbackConfirmed =
-                await verifyPlayback(page);
-
-
-            if(playbackConfirmed){
-
-                console.log(
-                    "SECOND PLAYBACK CONFIRMED"
-                );
-
-            }else{
-
-                console.log(
-                    "SECOND PLAYBACK NOT CONFIRMED"
-                );
-
-            }
-
-
-            // =================================================
-            // WAIT FOR QUALITY REQUESTS
-            // =================================================
-
-            console.log("");
-            console.log(
-                "WAITING FOR QUALITY REQUESTS..."
-            );
-
-
-            await sleep(12000);
-
-
-            // =================================================
-            // FILTER ONLY REQUESTS AFTER SECOND PLAY
-            // =================================================
-
-            const afterSecondPlay =
-                streams.filter(
-                    item =>
-                        item.time >= secondPlayTime
-                );
-
-
-            console.log("");
-            console.log(
-                "STREAMS AFTER SECOND PLAY:"
-            );
-
-
-            console.log(
-                JSON.stringify(
-                    afterSecondPlay,
-                    null,
-                    2
-                )
-            );
-
-
-            // =================================================
-            // AVAILABLE QUALITIES
-            // =================================================
-
-            const qualities =
-                [
-                    ...new Set(
-                        afterSecondPlay
-                            .map(
-                                item =>
-                                    item.quality
-                            )
-                    )
-                ]
-                .sort(
-                    (a,b) =>
-                        b-a
-                );
-
-
-            console.log("");
-            console.log(
-                "AVAILABLE QUALITIES AFTER SECOND PLAY:",
-                qualities
-            );
-
-
-            // =================================================
-            // SELECT QUALITY
-            // =================================================
-
-            let selected = null;
-
-
-            for(const preferred of [
-                480,
-                360,
-                240
-            ]){
-
-                const found =
-                    afterSecondPlay.find(
-                        item =>
-                            item.quality ===
-                            preferred
-                    );
-
-
-                if(found){
-
-                    selected = found;
-
-                    break;
-
-                }
-
-            }
-
-
-            // =================================================
-            // RESULT
-            // =================================================
-
-            if(selected){
-
-                console.log("");
-                console.log(
-                    "SELECTED:",
-                    `H264 ${selected.quality}`
-                );
-
-                console.log(
-                    "FINAL STREAM:"
-                );
-
-                console.log(
-                    selected.url
-                );
-
-
-                results.push({
-
-                    name:
-                        station.name,
-
-                    url:
-                        selected.url,
-
-                    quality:
-                        selected.quality
-
-                });
-
-
-            }else{
-
-                console.log("");
-                console.log(
-                    "NO VERIFIED H264 STREAM AFTER SECOND PLAY"
-                );
-
-
-                // Do NOT save an unverified stream.
-
-                results.push({
-
-                    name:
-                        station.name,
-
-                    url:
-                        null,
-
-                    quality:
-                        null
-
-                });
-
-            }
-
-
-        }catch(error){
-
-            console.log("");
-            console.log(
-                "ERROR:",
-                error.message ||
-                String(error)
-            );
-
-
-            results.push({
-
-                name:
-                    station.name,
-
-                url:
-                    null,
-
-                quality:
-                    null
-
-            });
 
         }
-
-
-        page.off(
-            "request",
-            requestHandler
-        );
 
 
         await page.goto(
@@ -953,29 +1365,17 @@ async function main(){
 
 
     // ========================================================
-    // SAVE
+    // LOAD OLD JSON
     // ========================================================
-
-    console.log("");
-    console.log(
-        "========================================"
-    );
-
-    console.log(
-        "SAVING RESULTS"
-    );
-
-    console.log(
-        "========================================"
-    );
-
-    console.log("");
-
 
     let existing = [];
 
 
-    if(fs.existsSync(OUTPUT_FILE)){
+    if(
+        fs.existsSync(
+            OUTPUT_FILE
+        )
+    ){
 
         try{
 
@@ -989,6 +1389,10 @@ async function main(){
 
         }catch(error){
 
+            console.log(
+                "OLD JSON INVALID - STARTING EMPTY"
+            );
+
             existing = [];
 
         }
@@ -996,12 +1400,16 @@ async function main(){
     }
 
 
+    // ========================================================
+    // MERGE
+    // ========================================================
+
     const output =
         existing.map(
             oldStation => {
 
                 const fresh =
-                    results.find(
+                    freshResults.find(
                         item =>
                             item.name ===
                             oldStation.name
@@ -1018,9 +1426,20 @@ async function main(){
                         oldStation.url
                     ){
 
+                        console.log("");
                         console.log(
                             "CHANGED:",
                             fresh.name
+                        );
+
+                        console.log(
+                            "OLD:",
+                            oldStation.url
+                        );
+
+                        console.log(
+                            "NEW:",
+                            fresh.url
                         );
 
                     }
@@ -1053,9 +1472,14 @@ async function main(){
         );
 
 
-    // Add stations that do not already exist.
+    // ========================================================
+    // ADD NEW
+    // ========================================================
 
-    for(const fresh of results){
+    for(
+        const fresh
+        of freshResults
+    ){
 
         const exists =
             output.some(
@@ -1065,17 +1489,20 @@ async function main(){
             );
 
 
-        if(
-            !exists &&
-            fresh.url
-        ){
+        if(!exists){
 
-            output.push(fresh);
+            output.push(
+                fresh
+            );
 
         }
 
     }
 
+
+    // ========================================================
+    // SAVE
+    // ========================================================
 
     fs.writeFileSync(
         OUTPUT_FILE,
@@ -1090,8 +1517,19 @@ async function main(){
 
     console.log("");
     console.log(
-        "DONE."
+        "========================================"
     );
+
+    console.log(
+        "SAVED:",
+        OUTPUT_FILE
+    );
+
+    console.log(
+        "========================================"
+    );
+
+    console.log("");
 
 
     await browser.close();
@@ -1103,6 +1541,7 @@ main().catch(
     error => {
 
         console.error(
+            "FATAL ERROR:",
             error
         );
 
