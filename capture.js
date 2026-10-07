@@ -1,433 +1,431 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const OUTPUT_FILE = "maspero-streams.json";
+const MASPERO_URL =
+    "https://www.maspero.eg/stream/";
 
-const stations = [
+const OUTPUT_FILE =
+    "maspero-streams.json";
+
+const STATIONS = [
+
     {
         name: "راديو مصر",
-        frequency: "88.7 FM",
-        page: "https://www.maspero.eg/stream/8"
+        url: "https://www.maspero.eg/stream/8"
     },
+
     {
         name: "الشرق الأوسط",
-        frequency: "89.5 FM",
-        page: "https://www.maspero.eg/stream/16"
+        url: "https://www.maspero.eg/stream/9"
     },
+
     {
         name: "البرنامج الثقافي ودراما FM",
-        frequency: "91.5 FM",
-        page: "https://www.maspero.eg/stream/12"
+        url: "https://www.maspero.eg/stream/10"
     },
+
     {
         name: "إذاعة القاهرة الكبرى",
-        frequency: "102.2 FM",
-        page: "https://www.maspero.eg/stream/14"
+        url: "https://www.maspero.eg/stream/11"
     },
+
     {
         name: "الأغاني",
-        frequency: "105.8 FM",
-        page: "https://www.maspero.eg/stream/13"
+        url: "https://www.maspero.eg/stream/12"
     },
+
     {
         name: "إذاعة البرنامج العام",
-        frequency: "107.4 FM",
-        page: "https://www.maspero.eg/stream/10"
+        url: "https://www.maspero.eg/stream/13"
     },
+
     {
         name: "الشباب والرياضة",
-        frequency: "108 FM",
-        page: "https://www.maspero.eg/stream/11"
+        url: "https://www.maspero.eg/stream/14"
     }
+
 ];
 
+console.log("");
+console.log("Starting Maspero Stream Finder...");
+console.log("Quality detection: AFTER SECOND PLAY");
+console.log("Priority: 480 > 360 > 240");
+console.log("");
 
-/* =========================================================
-   OLD DATA
-========================================================= */
 
-function loadOldData() {
+// ============================================================
+// HELPERS
+// ============================================================
 
-    if (!fs.existsSync(OUTPUT_FILE)) {
-        return {
-            updated: null,
-            stations: []
-        };
-    }
+function sleep(ms){
 
-    try {
-        return JSON.parse(
-            fs.readFileSync(
-                OUTPUT_FILE,
-                "utf8"
-            )
-        );
-    } catch (error) {
-        return {
-            updated: null,
-            stations: []
-        };
-    }
+    return new Promise(
+        resolve => setTimeout(resolve, ms)
+    );
+
 }
 
 
-function getOldStation(oldData, station) {
+function getQuality(url){
 
-    if (!Array.isArray(oldData.stations)) {
-        return null;
-    }
-
-    return oldData.stations.find(
-        item =>
-            item.name === station.name &&
-            item.frequency === station.frequency
-    ) || null;
-}
-
-
-/* =========================================================
-   H264
-========================================================= */
-
-function isH264Stream(url) {
-
-    if (!url) {
-        return false;
-    }
-
-    if (!/\.m3u8(?:[?#]|$)/i.test(url)) {
-        return false;
-    }
-
-    if (/\/cdn\/manifest\//i.test(url)) {
-        return false;
-    }
-
-    return /live-h264-\d+\.m3u8/i.test(url);
-}
-
-
-function getQuality(url) {
+    if(!url) return null;
 
     const match =
         url.match(
             /live-h264-(\d+)\.m3u8/i
         );
 
-    if (!match) {
-        return 0;
-    }
+    if(!match) return null;
 
     return Number(match[1]);
+
 }
 
 
-/* =========================================================
-   DAILYMotion FRAME
-========================================================= */
+function getDailymotionFrame(page){
 
-function getDailymotionFrame(page) {
+    const frame =
+        page.frames().find(
+            frame =>
+                /geo\.dailymotion\.com/i
+                    .test(frame.url())
+        );
 
-    return page.frames().find(
-        frame =>
-            /geo\.dailymotion\.com/i.test(
-                frame.url()
-            )
-    ) || null;
+    return frame || null;
+
 }
 
 
-/* =========================================================
-   PLAY
-========================================================= */
+// ============================================================
+// PLAY
+// ============================================================
 
-async function clickRealPlayButton(page) {
+async function clickRealPlayButton(page){
 
     const frame =
         getDailymotionFrame(page);
 
-    if (!frame) {
+    if(!frame){
+
         console.log(
-            "Dailymotion frame NOT FOUND."
+            "PLAY: DAILYMOTION FRAME NOT FOUND"
         );
+
         return false;
+
     }
+
 
     const selectors = [
 
         'button[aria-label*="Play" i]',
         'button[title*="Play" i]',
 
+        '[aria-label*="Play video" i]',
+        '[title*="Play video" i]',
+
         'button[aria-label*="تشغيل" i]',
         'button[title*="تشغيل" i]',
 
-        ".dmp_Player__playButton",
-        ".dmp_Player__play",
-        ".dmp_Player__centerPlayButton",
+        '.dmp_PlaybackControlsButton[aria-label*="Play" i]'
 
-        '[class*="playButton"]',
-        '[class*="play-button"]',
-        '[class*="play_button"]'
     ];
 
 
-    for (const selector of selectors) {
+    for(const selector of selectors){
 
-        const button =
-            frame
-                .locator(selector)
-                .first();
+        try{
 
-        if (
-            await button.count()
-        ) {
+            const button =
+                frame.locator(selector).first();
 
-            try {
+            if(
+                await button.count() &&
+                await button.isVisible().catch(()=>false)
+            ){
 
                 await button.click({
-                    timeout: 3000
+                    force:true
                 });
 
                 console.log(
-                    `PLAY CLICKED: ${selector}`
+                    "PLAY CLICKED:",
+                    selector
                 );
 
                 return true;
 
-            } catch (error) {}
+            }
+
+        }catch(error){
+
+            // Try next selector.
+
         }
+
     }
 
 
-    /* Center click fallback */
+    // Fallback: click video itself.
 
-    try {
+    try{
 
         const video =
-            frame
-                .locator("video")
-                .first();
+            frame.locator("video").first();
 
-        if (
-            await video.count()
-        ) {
+        if(await video.count()){
 
-            const box =
-                await video.boundingBox();
+            await video.click({
+                position:{
+                    x:200,
+                    y:100
+                },
+                force:true
+            });
 
-            if (box) {
+            console.log(
+                "PLAY CLICKED: VIDEO FALLBACK"
+            );
 
-                await page.mouse.click(
-                    box.x +
-                        box.width / 2,
+            return true;
 
-                    box.y +
-                        box.height / 2
-                );
-
-                console.log(
-                    "PLAY CLICKED: CENTER"
-                );
-
-                return true;
-            }
         }
 
-    } catch (error) {}
+    }catch(error){
+
+        // Ignore.
+
+    }
 
 
     console.log(
-        "PLAY BUTTON NOT FOUND."
+        "PLAY BUTTON NOT FOUND"
     );
 
     return false;
+
 }
 
 
-/* =========================================================
-   STOP
-========================================================= */
+// ============================================================
+// STOP
+// ============================================================
 
-async function stopPlayer(page) {
+async function stopPlayer(page){
+
+    console.log("");
+    console.log("STOP...");
+
 
     const frame =
         getDailymotionFrame(page);
 
-    if (!frame) {
+    if(!frame){
+
+        console.log(
+            "STOP: DAILYMOTION FRAME NOT FOUND"
+        );
+
         return false;
+
     }
 
 
-    const selectors = [
+    const pauseSelectors = [
 
         'button[aria-label*="Pause" i]',
         'button[title*="Pause" i]',
 
+        '[aria-label*="Pause video" i]',
+        '[title*="Pause video" i]',
+
         'button[aria-label*="إيقاف" i]',
+        'button[aria-label*="إيقاف مؤقت" i]',
         'button[title*="إيقاف" i]',
 
-        ".dmp_Player__pauseButton",
+        '.dmp_PlaybackControlsButton[aria-label*="Pause" i]'
 
-        '[class*="pauseButton"]',
-        '[class*="pause-button"]',
-        '[class*="pause_button"]'
     ];
 
 
-    for (const selector of selectors) {
+    for(const selector of pauseSelectors){
 
-        const button =
-            frame
-                .locator(selector)
-                .first();
+        try{
 
-        if (
-            await button.count()
-        ) {
+            const button =
+                frame.locator(selector).first();
 
-            try {
+            if(
+                await button.count() &&
+                await button.isVisible().catch(()=>false)
+            ){
 
                 await button.click({
-                    timeout: 3000
+                    force:true
                 });
 
                 console.log(
-                    `STOP CLICKED: ${selector}`
+                    "STOP CLICKED:",
+                    selector
                 );
+
+                await sleep(1500);
 
                 return true;
 
-            } catch (error) {}
+            }
+
+        }catch(error){
+
+            // Try next selector.
+
         }
+
     }
 
 
-    /* Fallback */
+    // ========================================================
+    // FALLBACK
+    // ========================================================
 
-    try {
+    console.log(
+        "STOP BUTTON NOT FOUND - TRYING MEDIA PAUSE"
+    );
 
-        const result =
+
+    try{
+
+        const paused =
             await frame
                 .locator("video, audio")
                 .evaluateAll(
                     elements => {
 
-                        let stopped = false;
+                        let changed = false;
 
                         elements.forEach(
-                            element => {
+                            media => {
 
-                                try {
+                                if(!media.paused){
 
-                                    if (
-                                        !element.paused
-                                    ) {
+                                    media.pause();
 
-                                        element.pause();
+                                    changed = true;
 
-                                        stopped = true;
-                                    }
+                                }
 
-                                } catch (e) {}
                             }
                         );
 
-                        return stopped;
+                        return changed;
+
                     }
                 );
 
-        if (result) {
 
-            console.log(
-                "STOPPED USING MEDIA PAUSE"
-            );
-
-            return true;
-        }
-
-    } catch (error) {}
+        console.log(
+            "MEDIA PAUSE RESULT:",
+            paused
+        );
 
 
-    return false;
+        await sleep(1500);
+
+        return paused;
+
+    }catch(error){
+
+        console.log(
+            "MEDIA PAUSE ERROR:",
+            error.message ||
+            String(error)
+        );
+
+        return false;
+
+    }
+
 }
 
 
-/* =========================================================
-   VERIFY PLAYBACK
-========================================================= */
+// ============================================================
+// VERIFY PLAYBACK
+// ============================================================
 
-async function verifyPlayback(page) {
+async function verifyPlayback(page){
 
     const frame =
         getDailymotionFrame(page);
 
-    if (!frame) {
+    if(!frame){
+
+        console.log(
+            "PLAYBACK NOT CONFIRMED: FRAME NOT FOUND"
+        );
+
         return false;
+
     }
 
 
-    let previousTime = -1;
+    for(let i = 0; i < 12; i++){
+
+        try{
+
+            const state =
+                await frame
+                    .locator("video, audio")
+                    .evaluateAll(
+                        elements => {
+
+                            return elements.map(
+                                media => ({
+                                    paused:
+                                        media.paused,
+
+                                    readyState:
+                                        media.readyState,
+
+                                    currentTime:
+                                        media.currentTime,
+
+                                    duration:
+                                        media.duration
+                                })
+                            );
+
+                        }
+                    );
 
 
-    for (
-        let i = 0;
-        i < 12;
-        i++
-    ) {
-
-        await page.waitForTimeout(
-            1000
-        );
+            const playing =
+                state.some(
+                    media =>
+                        !media.paused &&
+                        media.readyState >= 2 &&
+                        media.currentTime > 0
+                );
 
 
-        const state =
-            await frame
-                .locator("video, audio")
-                .evaluateAll(
-                    elements =>
-                        elements.map(
-                            element => ({
-                                paused:
-                                    element.paused,
-
-                                readyState:
-                                    element.readyState,
-
-                                currentTime:
-                                    element.currentTime
-                            })
-                        )
-                )
-                .catch(() => []);
-
-
-        const playing =
-            state.find(
-                media =>
-                    media.paused === false &&
-                    media.readyState >= 2 &&
-                    media.currentTime > 0
-            );
-
-
-        if (playing) {
-
-            if (
-                previousTime >= 0 &&
-                playing.currentTime >
-                    previousTime
-            ) {
+            if(playing){
 
                 console.log(
                     "PLAYBACK CONFIRMED"
                 );
 
                 return true;
+
             }
 
-            previousTime =
-                playing.currentTime;
+        }catch(error){
+
+            // Continue checking.
+
         }
+
+
+        await sleep(1000);
+
     }
 
 
@@ -436,572 +434,647 @@ async function verifyPlayback(page) {
     );
 
     return false;
+
 }
 
 
-/* =========================================================
-   CAPTURE ONE STATION
-========================================================= */
+// ============================================================
+// DIAGNOSTIC: DAILYMOTION BUTTONS
+// ============================================================
 
-async function captureStation(
-    browser,
-    station
-) {
+async function logDailymotionButtons(page){
 
-    console.log("");
-    console.log(
-        "========================================"
-    );
+    const frame =
+        getDailymotionFrame(page);
 
-    console.log(
-        `OPENING: ${station.name}`
-    );
+    if(!frame){
 
-    console.log(
-        station.page
-    );
+        console.log(
+            "DAILYMOTION BUTTONS: FRAME NOT FOUND"
+        );
 
-    console.log(
-        "========================================"
-    );
+        return;
+
+    }
+
+
+    try{
+
+        const buttons =
+            await frame
+                .locator("button")
+                .evaluateAll(
+                    elements =>
+                        elements.map(
+                            (element,index) => ({
+                                index,
+
+                                text:
+                                    (
+                                        element.innerText ||
+                                        ""
+                                    ).trim(),
+
+                                aria:
+                                    element.getAttribute(
+                                        "aria-label"
+                                    ) || "",
+
+                                title:
+                                    element.getAttribute(
+                                        "title"
+                                    ) || "",
+
+                                cls:
+                                    typeof element.className ===
+                                    "string"
+                                        ?
+                                        element.className
+                                        :
+                                        ""
+                            })
+                        )
+                );
+
+
+        console.log("");
+        console.log(
+            "DAILYMOTION BUTTONS AFTER PLAY:"
+        );
+
+        console.log(
+            JSON.stringify(
+                buttons,
+                null,
+                2
+            )
+        );
+
+        console.log("");
+
+    }catch(error){
+
+        console.log(
+            "BUTTON DIAGNOSTIC ERROR:",
+            error.message ||
+            String(error)
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// MAIN
+// ============================================================
+
+async function main(){
+
+    const browser =
+        await chromium.launch({
+            headless:true
+        });
 
 
     const page =
         await browser.newPage();
 
 
-    /*
-       IMPORTANT:
-
-       streamsBeforePlay2 = everything that happened
-       before the SECOND PLAY.
-
-       We will completely ignore it.
-    */
-
-    const allStreams =
-        [];
+    const results = [];
 
 
-    page.on(
-        "request",
-        request => {
+    for(const station of STATIONS){
 
-            const url =
-                request.url();
+        console.log("");
+        console.log(
+            "========================================"
+        );
 
-            if (
-                !isH264Stream(url)
-            ) {
-                return;
+        console.log(
+            "OPENING:",
+            station.name
+        );
+
+        console.log(
+            station.url
+        );
+
+        console.log(
+            "========================================"
+        );
+
+        console.log("");
+
+
+        const streams = [];
+
+
+        // ====================================================
+        // CAPTURE REQUESTS
+        // ====================================================
+
+        const requestHandler =
+            request => {
+
+                const url =
+                    request.url();
+
+
+                if(
+                    !/live-h264-\d+\.m3u8/i
+                        .test(url)
+                ){
+
+                    return;
+
+                }
+
+
+                const quality =
+                    getQuality(url);
+
+
+                if(!quality){
+
+                    return;
+
+                }
+
+
+                console.log(
+                    `H264 ${quality} REQUESTED`
+                );
+
+                console.log(url);
+
+
+                streams.push({
+
+                    quality,
+
+                    url,
+
+                    time:Date.now()
+
+                });
+
+            };
+
+
+        page.on(
+            "request",
+            requestHandler
+        );
+
+
+        try{
+
+            // =================================================
+            // OPEN PAGE
+            // =================================================
+
+            await page.goto(
+                station.url,
+                {
+                    waitUntil:"domcontentloaded",
+                    timeout:60000
+                }
+            );
+
+
+            console.log(
+                "PAGE LOADED"
+            );
+
+
+            await sleep(5000);
+
+
+            // =================================================
+            // FIRST PLAY
+            // =================================================
+
+            console.log("");
+            console.log(
+                "FIRST PLAY..."
+            );
+
+
+            await clickRealPlayButton(page);
+
+
+            await sleep(3000);
+
+
+            await verifyPlayback(page);
+
+
+            // =================================================
+            // DIAGNOSTIC BUTTON LIST
+            // =================================================
+
+            await logDailymotionButtons(page);
+
+
+            // =================================================
+            // STOP
+            // =================================================
+
+            const stopped =
+                await stopPlayer(page);
+
+
+            console.log(
+                "STOP RESULT:",
+                stopped
+            );
+
+
+            await sleep(2500);
+
+
+            // =================================================
+            // SECOND PLAY
+            // =================================================
+
+            console.log("");
+            console.log(
+                "========================================"
+            );
+
+            console.log(
+                "SECOND PLAY STARTING"
+            );
+
+            console.log(
+                "Streams before this point will be ignored."
+            );
+
+            console.log(
+                "========================================"
+            );
+
+            console.log("");
+
+
+            // Important:
+            // Ignore every request captured before
+            // the second Play.
+
+            streams.length = 0;
+
+
+            const secondPlayTime =
+                Date.now();
+
+
+            await clickRealPlayButton(page);
+
+
+            const playbackConfirmed =
+                await verifyPlayback(page);
+
+
+            if(playbackConfirmed){
+
+                console.log(
+                    "SECOND PLAYBACK CONFIRMED"
+                );
+
+            }else{
+
+                console.log(
+                    "SECOND PLAYBACK NOT CONFIRMED"
+                );
+
             }
 
-            const quality =
-                getQuality(url);
 
-            allStreams.push({
+            // =================================================
+            // WAIT FOR QUALITY REQUESTS
+            // =================================================
 
-                quality: quality,
+            console.log("");
+            console.log(
+                "WAITING FOR QUALITY REQUESTS..."
+            );
 
-                url: url,
 
-                time: Date.now()
+            await sleep(12000);
+
+
+            // =================================================
+            // FILTER ONLY REQUESTS AFTER SECOND PLAY
+            // =================================================
+
+            const afterSecondPlay =
+                streams.filter(
+                    item =>
+                        item.time >= secondPlayTime
+                );
+
+
+            console.log("");
+            console.log(
+                "STREAMS AFTER SECOND PLAY:"
+            );
+
+
+            console.log(
+                JSON.stringify(
+                    afterSecondPlay,
+                    null,
+                    2
+                )
+            );
+
+
+            // =================================================
+            // AVAILABLE QUALITIES
+            // =================================================
+
+            const qualities =
+                [
+                    ...new Set(
+                        afterSecondPlay
+                            .map(
+                                item =>
+                                    item.quality
+                            )
+                    )
+                ]
+                .sort(
+                    (a,b) =>
+                        b-a
+                );
+
+
+            console.log("");
+            console.log(
+                "AVAILABLE QUALITIES AFTER SECOND PLAY:",
+                qualities
+            );
+
+
+            // =================================================
+            // SELECT QUALITY
+            // =================================================
+
+            let selected = null;
+
+
+            for(const preferred of [
+                480,
+                360,
+                240
+            ]){
+
+                const found =
+                    afterSecondPlay.find(
+                        item =>
+                            item.quality ===
+                            preferred
+                    );
+
+
+                if(found){
+
+                    selected = found;
+
+                    break;
+
+                }
+
+            }
+
+
+            // =================================================
+            // RESULT
+            // =================================================
+
+            if(selected){
+
+                console.log("");
+                console.log(
+                    "SELECTED:",
+                    `H264 ${selected.quality}`
+                );
+
+                console.log(
+                    "FINAL STREAM:"
+                );
+
+                console.log(
+                    selected.url
+                );
+
+
+                results.push({
+
+                    name:
+                        station.name,
+
+                    url:
+                        selected.url,
+
+                    quality:
+                        selected.quality
+
+                });
+
+
+            }else{
+
+                console.log("");
+                console.log(
+                    "NO VERIFIED H264 STREAM AFTER SECOND PLAY"
+                );
+
+
+                // Do NOT save an unverified stream.
+
+                results.push({
+
+                    name:
+                        station.name,
+
+                    url:
+                        null,
+
+                    quality:
+                        null
+
+                });
+
+            }
+
+
+        }catch(error){
+
+            console.log("");
+            console.log(
+                "ERROR:",
+                error.message ||
+                String(error)
+            );
+
+
+            results.push({
+
+                name:
+                    station.name,
+
+                url:
+                    null,
+
+                quality:
+                    null
 
             });
 
-            console.log("");
-            console.log(
-                `H264 ${quality} REQUESTED`
-            );
-
-            console.log(url);
         }
-    );
 
 
-    try {
+        page.off(
+            "request",
+            requestHandler
+        );
 
-        /* -------------------------------------
-           OPEN
-        ------------------------------------- */
 
         await page.goto(
-            station.page,
-            {
-                waitUntil:
-                    "domcontentloaded",
+            "about:blank"
+        ).catch(()=>{});
 
-                timeout:
-                    60000
-            }
-        );
 
+        await sleep(1000);
 
-        console.log(
-            "PAGE LOADED"
-        );
-
-
-        await page.waitForTimeout(
-            3000
-        );
-
-
-        /* -------------------------------------
-           FIRST PLAY
-        ------------------------------------- */
-
-        console.log("");
-        console.log(
-            "FIRST PLAY..."
-        );
-
-
-        const firstPlay =
-            await clickRealPlayButton(
-                page
-            );
-
-
-        if (!firstPlay) {
-
-            await page.close();
-
-            return null;
-        }
-
-
-        await verifyPlayback(
-            page
-        );
-
-
-        await page.waitForTimeout(
-            4000
-        );
-
-
-        /* -------------------------------------
-           STOP
-        ------------------------------------- */
-
-        console.log("");
-        console.log(
-            "STOP..."
-        );
-
-
-        await stopPlayer(
-            page
-        );
-
-
-        await page.waitForTimeout(
-            2000
-        );
-
-
-        /* -------------------------------------
-           IMPORTANT POINT
-        ------------------------------------- */
-
-        const secondPlayStartedAt =
-            Date.now();
-
-
-        console.log("");
-        console.log(
-            "========================================"
-        );
-
-        console.log(
-            "SECOND PLAY STARTING"
-        );
-
-        console.log(
-            "Streams before this point will be ignored."
-        );
-
-        console.log(
-            "========================================"
-        );
-
-
-        /* -------------------------------------
-           SECOND PLAY
-        ------------------------------------- */
-
-        const secondPlay =
-            await clickRealPlayButton(
-                page
-            );
-
-
-        if (!secondPlay) {
-
-            await page.close();
-
-            return null;
-        }
-
-
-        const secondPlayback =
-            await verifyPlayback(
-                page
-            );
-
-
-        if (!secondPlayback) {
-
-            await page.close();
-
-            return null;
-        }
-
-
-        console.log("");
-        console.log(
-            "SECOND PLAYBACK CONFIRMED"
-        );
-
-
-        /* -------------------------------------
-           WAIT FOR NEW REQUESTS
-        ------------------------------------- */
-
-        await page.waitForTimeout(
-            12000
-        );
-
-
-        /* -------------------------------------
-           ONLY REQUESTS AFTER SECOND PLAY
-        ------------------------------------- */
-
-        const validStreams =
-            allStreams.filter(
-                item =>
-                    item.time >=
-                    secondPlayStartedAt
-            );
-
-
-        console.log("");
-        console.log(
-            "========================================"
-        );
-
-        console.log(
-            "STREAMS AFTER SECOND PLAY:"
-        );
-
-        console.log(
-            JSON.stringify(
-                validStreams,
-                null,
-                2
-            )
-        );
-
-        console.log(
-            "========================================"
-        );
-
-
-        /* -------------------------------------
-           KEEP HIGHEST QUALITY
-        ------------------------------------- */
-
-        const byQuality =
-            new Map();
-
-
-        validStreams.forEach(
-            item => {
-
-                byQuality.set(
-                    item.quality,
-                    item.url
-                );
-
-            }
-        );
-
-
-        const qualities =
-            [...byQuality.keys()]
-                .sort(
-                    (a, b) => b - a
-                );
-
-
-        console.log("");
-        console.log(
-            "AVAILABLE QUALITIES AFTER SECOND PLAY:"
-        );
-
-        console.log(
-            qualities
-        );
-
-
-        let selectedStream =
-            null;
-
-
-        if (
-            byQuality.has(480)
-        ) {
-
-            selectedStream =
-                byQuality.get(480);
-
-            console.log(
-                "SELECTED: H264 480"
-            );
-
-        } else if (
-            byQuality.has(360)
-        ) {
-
-            selectedStream =
-                byQuality.get(360);
-
-            console.log(
-                "SELECTED: H264 360"
-            );
-
-        } else if (
-            byQuality.has(240)
-        ) {
-
-            selectedStream =
-                byQuality.get(240);
-
-            console.log(
-                "SELECTED: H264 240"
-            );
-        }
-
-
-        await page.close();
-
-
-        if (!selectedStream) {
-
-            console.log(
-                "NO VALID STREAM AFTER SECOND PLAY."
-            );
-
-            return null;
-        }
-
-
-        console.log("");
-        console.log(
-            "FINAL STREAM:"
-        );
-
-        console.log(
-            selectedStream
-        );
-
-
-        return selectedStream;
-
-
-    } catch (error) {
-
-        console.log("");
-        console.log(
-            `ERROR: ${station.name}`
-        );
-
-        console.log(
-            error.message
-        );
-
-
-        await page.close();
-
-        return null;
     }
-}
 
 
-/* =========================================================
-   MAIN
-========================================================= */
-
-(async () => {
+    // ========================================================
+    // SAVE
+    // ========================================================
 
     console.log("");
     console.log(
-        "Starting Maspero Stream Finder..."
+        "========================================"
     );
 
     console.log(
-        "Quality detection: AFTER SECOND PLAY"
+        "SAVING RESULTS"
     );
 
     console.log(
-        "Priority: 480 > 360 > 240"
+        "========================================"
     );
 
-
-    const oldData =
-        loadOldData();
+    console.log("");
 
 
-    const browser =
-        await chromium.launch({
-            headless: true
-        });
+    let existing = [];
 
 
-    const outputStations =
-        [];
+    if(fs.existsSync(OUTPUT_FILE)){
+
+        try{
+
+            existing =
+                JSON.parse(
+                    fs.readFileSync(
+                        OUTPUT_FILE,
+                        "utf8"
+                    )
+                );
+
+        }catch(error){
+
+            existing = [];
+
+        }
+
+    }
 
 
-    let changed =
-        false;
+    const output =
+        existing.map(
+            oldStation => {
+
+                const fresh =
+                    results.find(
+                        item =>
+                            item.name ===
+                            oldStation.name
+                    );
 
 
-    for (
-        const station of stations
-    ) {
+                if(
+                    fresh &&
+                    fresh.url
+                ){
 
-        const oldStation =
-            getOldStation(
-                oldData,
-                station
-            );
+                    if(
+                        fresh.url !==
+                        oldStation.url
+                    ){
 
+                        console.log(
+                            "CHANGED:",
+                            fresh.name
+                        );
 
-        const newStream =
-            await captureStation(
-                browser,
-                station
-            );
-
-
-        if (!newStream) {
-
-            console.log("");
-            console.log(
-                `CAPTURE FAILED: ${station.name}`
-            );
+                    }
 
 
-            if (
-                oldStation &&
-                oldStation.stream
-            ) {
+                    return {
+
+                        ...oldStation,
+
+                        url:
+                            fresh.url,
+
+                        quality:
+                            fresh.quality
+
+                    };
+
+                }
+
 
                 console.log(
-                    "KEEPING PREVIOUS STREAM"
+                    "KEEPING OLD STREAM:",
+                    oldStation.name
                 );
 
 
-                outputStations.push({
+                return oldStation;
 
-                    name:
-                        station.name,
-
-                    frequency:
-                        station.frequency,
-
-                    stream:
-                        oldStation.stream
-
-                });
-
-            } else {
-
-                outputStations.push({
-
-                    name:
-                        station.name,
-
-                    frequency:
-                        station.frequency,
-
-                    stream:
-                        ""
-
-                });
             }
-
-
-            continue;
-        }
-
-
-        if (
-            !oldStation ||
-            oldStation.stream !==
-                newStream
-        ) {
-
-            console.log("");
-            console.log(
-                `CHANGED: ${station.name}`
-            );
-
-            changed =
-                true;
-
-        } else {
-
-            console.log("");
-            console.log(
-                `UNCHANGED: ${station.name}`
-            );
-        }
-
-
-        outputStations.push({
-
-            name:
-                station.name,
-
-            frequency:
-                station.frequency,
-
-            stream:
-                newStream
-
-        });
-    }
-
-
-    await browser.close();
-
-
-    if (!changed) {
-
-        console.log("");
-        console.log(
-            "NO CHANGES DETECTED."
         );
 
-        console.log(
-            "JSON NOT MODIFIED."
-        );
 
-        process.exit(0);
+    // Add stations that do not already exist.
+
+    for(const fresh of results){
+
+        const exists =
+            output.some(
+                item =>
+                    item.name ===
+                    fresh.name
+            );
+
+
+        if(
+            !exists &&
+            fresh.url
+        ){
+
+            output.push(fresh);
+
+        }
+
     }
-
-
-    const output = {
-
-        updated:
-            new Date().toISOString(),
-
-        stations:
-            outputStations
-
-    };
 
 
     fs.writeFileSync(
@@ -1009,23 +1082,31 @@ async function captureStation(
         JSON.stringify(
             output,
             null,
-            4
-        ) + "\n",
+            2
+        ),
         "utf8"
     );
 
 
     console.log("");
     console.log(
-        "========================================"
+        "DONE."
     );
 
-    console.log(
-        "maspero-streams.json UPDATED"
-    );
 
-    console.log(
-        "========================================"
-    );
+    await browser.close();
 
-})();
+}
+
+
+main().catch(
+    error => {
+
+        console.error(
+            error
+        );
+
+        process.exit(1);
+
+    }
+);
