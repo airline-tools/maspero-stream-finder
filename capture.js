@@ -43,18 +43,16 @@ const stations = [
 
 
 /* =========================================================
-   LOAD OLD DATA
+   OLD DATA
 ========================================================= */
 
 function loadOldData() {
 
     if (!fs.existsSync(OUTPUT_FILE)) {
-
         return {
             updated: null,
             stations: []
         };
-
     }
 
     try {
@@ -68,23 +66,14 @@ function loadOldData() {
 
     } catch (error) {
 
-        console.log(
-            "Could not read existing JSON."
-        );
-
         return {
             updated: null,
             stations: []
         };
 
     }
-
 }
 
-
-/* =========================================================
-   FIND OLD STATION
-========================================================= */
 
 function getOldStation(oldData, station) {
 
@@ -97,12 +86,11 @@ function getOldStation(oldData, station) {
             item.name === station.name &&
             item.frequency === station.frequency
     ) || null;
-
 }
 
 
 /* =========================================================
-   H264 STREAM
+   H264 STREAM DETECTION
 ========================================================= */
 
 function isH264Stream(url) {
@@ -115,20 +103,13 @@ function isH264Stream(url) {
         return false;
     }
 
-    if (
-        /\/cdn\/manifest\//i.test(url)
-    ) {
+    if (/\/cdn\/manifest\//i.test(url)) {
         return false;
     }
 
     return /live-h264-\d+\.m3u8/i.test(url);
-
 }
 
-
-/* =========================================================
-   QUALITY
-========================================================= */
 
 function getQuality(url) {
 
@@ -142,12 +123,11 @@ function getQuality(url) {
     }
 
     return Number(match[1]);
-
 }
 
 
 /* =========================================================
-   FIND DAILYMOTION FRAME
+   DAILYMotion FRAME
 ========================================================= */
 
 function getDailymotionFrame(page) {
@@ -158,34 +138,24 @@ function getDailymotionFrame(page) {
                 frame.url()
             )
     ) || null;
-
 }
 
 
 /* =========================================================
-   CLICK REAL PLAY BUTTON
+   PLAY
 ========================================================= */
 
 async function clickRealPlayButton(page) {
 
     console.log("");
-    console.log(
-        "Looking for Dailymotion player..."
-    );
-
+    console.log("Looking for Dailymotion player...");
 
     let frame = null;
 
-
-    for (
-        let attempt = 1;
-        attempt <= 20;
-        attempt++
-    ) {
+    for (let attempt = 1; attempt <= 20; attempt++) {
 
         frame =
             getDailymotionFrame(page);
-
 
         if (frame) {
 
@@ -194,16 +164,10 @@ async function clickRealPlayButton(page) {
             );
 
             break;
-
         }
 
-
-        await page.waitForTimeout(
-            1000
-        );
-
+        await page.waitForTimeout(1000);
     }
-
 
     if (!frame) {
 
@@ -212,79 +176,59 @@ async function clickRealPlayButton(page) {
         );
 
         return false;
-
     }
 
 
     console.log("");
-    console.log(
-        "Dailymotion frame:"
-    );
-
-    console.log(
-        frame.url()
-    );
+    console.log("Dailymotion frame:");
+    console.log(frame.url());
 
 
-    /*
-     * Give the player time to build
-     * its controls.
-     */
-
-    await page.waitForTimeout(
-        3000
-    );
+    await page.waitForTimeout(3000);
 
 
-    /* =====================================================
-       FIND PLAY BUTTONS
-    ===================================================== */
+    /* -----------------------------------------
+       SHOW BUTTONS
+    ----------------------------------------- */
 
     const buttons =
-        await frame.locator(
-            "button"
-        ).evaluateAll(
-            elements =>
-                elements.map(
-                    (element, index) => ({
+        await frame
+            .locator("button")
+            .evaluateAll(
+                elements =>
+                    elements.map(
+                        (element, index) => ({
+                            index,
 
-                        index,
+                            text:
+                                (
+                                    element.innerText ||
+                                    ""
+                                ).trim(),
 
-                        text:
-                            (
-                                element.innerText ||
-                                ""
-                            ).trim(),
+                            aria:
+                                element.getAttribute(
+                                    "aria-label"
+                                ) || "",
 
-                        aria:
-                            element.getAttribute(
-                                "aria-label"
-                            ) || "",
+                            title:
+                                element.getAttribute(
+                                    "title"
+                                ) || "",
 
-                        title:
-                            element.getAttribute(
-                                "title"
-                            ) || "",
-
-                        cls:
-                            typeof element.className ===
-                            "string"
-                                ? element.className
-                                : ""
-
-                    })
-                )
-        )
-        .catch(
-            () => []
-        );
+                            cls:
+                                typeof element.className ===
+                                "string"
+                                    ? element.className
+                                    : ""
+                        })
+                    )
+            )
+            .catch(() => []);
 
 
     console.log("");
-    console.log(
-        "DAILYMOTION BUTTONS:"
-    );
-
+    console.log("DAILYMOTION BUTTONS:");
     console.log(
         JSON.stringify(
             buttons,
@@ -294,9 +238,9 @@ async function clickRealPlayButton(page) {
     );
 
 
-    /* =====================================================
-       TRY ARIA PLAY
-    ===================================================== */
+    /* -----------------------------------------
+       PLAY BUTTON
+    ----------------------------------------- */
 
     const playSelectors = [
 
@@ -306,63 +250,7 @@ async function clickRealPlayButton(page) {
 
         'button[aria-label*="تشغيل" i]',
 
-        'button[title*="تشغيل" i]'
-
-    ];
-
-
-    for (
-        const selector of playSelectors
-    ) {
-
-        const button =
-            frame.locator(
-                selector
-            ).first();
-
-
-        if (
-            await button.count()
-        ) {
-
-            try {
-
-                await button.click({
-                    timeout: 5000
-                });
-
-
-                console.log("");
-                console.log(
-                    "PLAY BUTTON CLICKED"
-                );
-
-                console.log(
-                    `Selector: ${selector}`
-                );
-
-
-                return true;
-
-            }
-            catch (error) {
-
-                console.log(
-                    `Could not click ${selector}`
-                );
-
-            }
-
-        }
-
-    }
-
-
-    /* =====================================================
-       TRY DAILYMOTION PLAY BUTTON CLASSES
-    ===================================================== */
-
-    const classSelectors = [
+        'button[title*="تشغيل" i]',
 
         ".dmp_Player__playButton",
 
@@ -379,15 +267,12 @@ async function clickRealPlayButton(page) {
     ];
 
 
-    for (
-        const selector of classSelectors
-    ) {
+    for (const selector of playSelectors) {
 
         const button =
-            frame.locator(
-                selector
-            ).first();
-
+            frame
+                .locator(selector)
+                .first();
 
         if (
             await button.count()
@@ -399,7 +284,6 @@ async function clickRealPlayButton(page) {
                     timeout: 5000
                 });
 
-
                 console.log("");
                 console.log(
                     "PLAY BUTTON CLICKED"
@@ -409,35 +293,29 @@ async function clickRealPlayButton(page) {
                     `Selector: ${selector}`
                 );
 
-
                 return true;
 
-            }
-            catch (error) {
+            } catch (error) {
 
                 console.log(
                     `Could not click ${selector}`
                 );
 
             }
-
         }
-
     }
 
 
-    /* =====================================================
-       LAST OPTION:
-       CLICK CENTER OF PLAYER
-    ===================================================== */
+    /* -----------------------------------------
+       CENTER CLICK FALLBACK
+    ----------------------------------------- */
 
     try {
 
         const player =
-            frame.locator(
-                "video"
-            ).first();
-
+            frame
+                .locator("video")
+                .first();
 
         if (
             await player.count()
@@ -445,7 +323,6 @@ async function clickRealPlayButton(page) {
 
             const box =
                 await player.boundingBox();
-
 
             if (box) {
 
@@ -457,21 +334,16 @@ async function clickRealPlayButton(page) {
                         box.height / 2
                 );
 
-
                 console.log("");
                 console.log(
                     "CLICKED PLAYER CENTER"
                 );
 
-
                 return true;
-
             }
-
         }
 
-    }
-    catch (error) {
+    } catch (error) {
 
         console.log(
             "Could not click player center."
@@ -485,14 +357,162 @@ async function clickRealPlayButton(page) {
         "PLAY BUTTON NOT FOUND."
     );
 
-
     return false;
-
 }
 
 
 /* =========================================================
-   VERIFY DAILYMOTION PLAYBACK
+   STOP
+========================================================= */
+
+async function stopRealPlayer(page) {
+
+    console.log("");
+    console.log(
+        "STOPPING PLAYER..."
+    );
+
+
+    const frame =
+        getDailymotionFrame(page);
+
+
+    if (!frame) {
+
+        console.log(
+            "Dailymotion frame not found while stopping."
+        );
+
+        return false;
+    }
+
+
+    /* -----------------------------------------
+       TRY DAILYMOTION PAUSE BUTTON
+    ----------------------------------------- */
+
+    const pauseSelectors = [
+
+        'button[aria-label*="Pause" i]',
+
+        'button[title*="Pause" i]',
+
+        'button[aria-label*="إيقاف" i]',
+
+        'button[title*="إيقاف" i]',
+
+        ".dmp_Player__pauseButton",
+
+        '[class*="pauseButton"]',
+
+        '[class*="pause-button"]',
+
+        '[class*="pause_button"]'
+
+    ];
+
+
+    for (const selector of pauseSelectors) {
+
+        const button =
+            frame
+                .locator(selector)
+                .first();
+
+        if (
+            await button.count()
+        ) {
+
+            try {
+
+                await button.click({
+                    timeout: 5000
+                });
+
+                console.log(
+                    "PLAYER STOPPED USING PLAYER BUTTON."
+                );
+
+                return true;
+
+            } catch (error) {
+
+                console.log(
+                    `Could not stop using ${selector}`
+                );
+
+            }
+        }
+    }
+
+
+    /* -----------------------------------------
+       FALLBACK: PAUSE MEDIA
+    ----------------------------------------- */
+
+    try {
+
+        const result =
+            await frame
+                .locator("video, audio")
+                .evaluateAll(
+                    elements => {
+
+                        let stopped = false;
+
+                        elements.forEach(
+                            element => {
+
+                                try {
+
+                                    if (
+                                        !element.paused
+                                    ) {
+
+                                        element.pause();
+
+                                        stopped = true;
+
+                                    }
+
+                                } catch (e) {}
+
+                            }
+                        );
+
+                        return stopped;
+                    }
+                );
+
+
+        if (result) {
+
+            console.log(
+                "PLAYER STOPPED USING MEDIA PAUSE."
+            );
+
+            return true;
+        }
+
+    } catch (error) {
+
+        console.log(
+            "Could not pause media."
+        );
+
+    }
+
+
+    console.log(
+        "PLAYER STOP COULD NOT BE CONFIRMED."
+    );
+
+    return false;
+}
+
+
+/* =========================================================
+   VERIFY PLAYBACK
 ========================================================= */
 
 async function verifyPlayback(page) {
@@ -514,7 +534,6 @@ async function verifyPlayback(page) {
         );
 
         return false;
-
     }
 
 
@@ -533,39 +552,35 @@ async function verifyPlayback(page) {
 
 
         const state =
-            await frame.locator(
-                "video, audio"
-            ).evaluateAll(
-                elements =>
-                    elements.map(
-                        element => ({
+            await frame
+                .locator("video, audio")
+                .evaluateAll(
+                    elements =>
+                        elements.map(
+                            element => ({
+                                tag:
+                                    element.tagName,
 
-                            tag:
-                                element.tagName,
+                                paused:
+                                    element.paused,
 
-                            paused:
-                                element.paused,
+                                readyState:
+                                    element.readyState,
 
-                            readyState:
-                                element.readyState,
+                                currentTime:
+                                    element.currentTime,
 
-                            currentTime:
-                                element.currentTime,
+                                duration:
+                                    element.duration,
 
-                            duration:
-                                element.duration,
-
-                            src:
-                                element.currentSrc ||
-                                element.src ||
-                                ""
-
-                        })
-                    )
-            )
-            .catch(
-                () => []
-            );
+                                src:
+                                    element.currentSrc ||
+                                    element.src ||
+                                    ""
+                            })
+                        )
+                )
+                .catch(() => []);
 
 
         console.log("");
@@ -617,15 +632,12 @@ async function verifyPlayback(page) {
                 );
 
                 return true;
-
             }
 
 
             previousTime =
                 playing.currentTime;
-
         }
-
     }
 
 
@@ -634,9 +646,7 @@ async function verifyPlayback(page) {
         "PLAYBACK NOT CONFIRMED."
     );
 
-
     return false;
-
 }
 
 
@@ -675,9 +685,9 @@ async function captureStation(
         new Map();
 
 
-    /* =====================================================
+    /* -----------------------------------------
        NETWORK CAPTURE
-    ===================================================== */
+    ----------------------------------------- */
 
     page.on(
         "request",
@@ -690,9 +700,7 @@ async function captureStation(
             if (
                 !isH264Stream(url)
             ) {
-
                 return;
-
             }
 
 
@@ -721,6 +729,10 @@ async function captureStation(
 
     try {
 
+        /* -------------------------------------
+           OPEN PAGE
+        ------------------------------------- */
+
         await page.goto(
             station.page,
             {
@@ -738,9 +750,9 @@ async function captureStation(
         );
 
 
-        /* =================================================
-           CLICK REAL DAILYMOTION PLAY
-        ================================================= */
+        /* -------------------------------------
+           FIRST PLAY
+        ------------------------------------- */
 
         const clicked =
             await clickRealPlayButton(
@@ -758,50 +770,147 @@ async function captureStation(
             await page.close();
 
             return null;
-
         }
 
 
-        /* =================================================
-           VERIFY ACTUAL PLAYBACK
-        ================================================= */
+        /* -------------------------------------
+           WAIT FOR FIRST PLAYBACK
+        ------------------------------------- */
 
-        const playing =
+        await page.waitForTimeout(
+            5000
+        );
+
+
+        const firstPlayback =
             await verifyPlayback(
                 page
             );
 
 
-        if (!playing) {
+        if (!firstPlayback) {
 
             console.log("");
             console.log(
-                "STREAM REJECTED."
-            );
-
-            console.log(
-                "Reason: playback was not confirmed."
+                "FIRST PLAYBACK NOT CONFIRMED."
             );
 
             await page.close();
 
             return null;
-
         }
 
 
-        /* =================================================
-           AFTER PLAYBACK CONFIRMATION
-           WAIT FOR QUALITY REQUESTS
-        ================================================= */
+        /* -------------------------------------
+           STOP
+        ------------------------------------- */
+
+        const stopped =
+            await stopRealPlayer(
+                page
+            );
+
+
+        if (!stopped) {
+
+            console.log("");
+            console.log(
+                "STOP COULD NOT BE CONFIRMED."
+            );
+
+            await page.close();
+
+            return null;
+        }
+
+
+        /* -------------------------------------
+           WAIT AFTER STOP
+        ------------------------------------- */
+
+        await page.waitForTimeout(
+            2000
+        );
+
+
+        /* -------------------------------------
+           CLEAR OLD CAPTURE
+        ------------------------------------- */
+
+        streams.clear();
+
 
         console.log("");
         console.log(
-            "Playback confirmed."
+            "OLD CAPTURE CLEARED."
         );
 
+
+        /* -------------------------------------
+           SECOND PLAY
+        ------------------------------------- */
+
+        const clickedAgain =
+            await clickRealPlayButton(
+                page
+            );
+
+
+        if (!clickedAgain) {
+
+            console.log("");
+            console.log(
+                "COULD NOT RESTART PLAYER."
+            );
+
+            await page.close();
+
+            return null;
+        }
+
+
+        console.log("");
         console.log(
-            "Waiting for H264 quality streams..."
+            "SECOND PLAY STARTED."
+        );
+
+
+        /* -------------------------------------
+           VERIFY SECOND PLAYBACK
+        ------------------------------------- */
+
+        const secondPlayback =
+            await verifyPlayback(
+                page
+            );
+
+
+        if (!secondPlayback) {
+
+            console.log("");
+            console.log(
+                "SECOND PLAYBACK NOT CONFIRMED."
+            );
+
+            await page.close();
+
+            return null;
+        }
+
+
+        console.log("");
+        console.log(
+            "SECOND PLAYBACK CONFIRMED."
+        );
+
+
+        /* -------------------------------------
+           GIVE NETWORK TIME
+        ------------------------------------- */
+
+        console.log("");
+        console.log(
+            "WAITING FOR H264 QUALITY STREAMS..."
         );
 
 
@@ -825,18 +934,11 @@ async function captureStation(
         await page.close();
 
         return null;
-
     }
 
 
     /* =====================================================
-       SELECT QUALITY
-
-       480
-       ↓
-       360
-       ↓
-       240
+       SELECT HIGHEST AVAILABLE QUALITY
     ===================================================== */
 
     console.log("");
@@ -844,12 +946,16 @@ async function captureStation(
         "AVAILABLE H264 QUALITIES:"
     );
 
-    console.log(
+
+    const qualities =
         [...streams.keys()]
             .sort(
-                (a, b) =>
-                    b - a
-            )
+                (a, b) => b - a
+            );
+
+
+    console.log(
+        qualities
     );
 
 
@@ -869,8 +975,7 @@ async function captureStation(
             "SELECTED H264 480"
         );
 
-    }
-    else if (
+    } else if (
         streams.has(360)
     ) {
 
@@ -882,8 +987,7 @@ async function captureStation(
             "SELECTED H264 360"
         );
 
-    }
-    else if (
+    } else if (
         streams.has(240)
     ) {
 
@@ -909,7 +1013,6 @@ async function captureStation(
         );
 
         return null;
-
     }
 
 
@@ -924,7 +1027,6 @@ async function captureStation(
 
 
     return selectedStream;
-
 }
 
 
@@ -944,6 +1046,10 @@ async function captureStation(
     );
 
     console.log(
+        "Playback sequence: PLAY -> STOP -> PLAY"
+    );
+
+    console.log(
         "Preferred quality: H264 480"
     );
 
@@ -954,9 +1060,7 @@ async function captureStation(
 
     const browser =
         await chromium.launch({
-
             headless: true
-
         });
 
 
@@ -986,6 +1090,10 @@ async function captureStation(
             );
 
 
+        /* -------------------------------------
+           CAPTURE FAILED
+        ------------------------------------- */
+
         if (!newStream) {
 
             console.log("");
@@ -994,15 +1102,15 @@ async function captureStation(
             );
 
 
-            /*
-             * Keep old stream if the new
-             * stream could not be verified.
-             */
-
             if (
                 oldStation &&
                 oldStation.stream
             ) {
+
+                console.log(
+                    "Keeping previous stream."
+                );
+
 
                 outputStations.push({
 
@@ -1017,8 +1125,7 @@ async function captureStation(
 
                 });
 
-            }
-            else {
+            } else {
 
                 outputStations.push({
 
@@ -1037,13 +1144,17 @@ async function captureStation(
 
 
             continue;
-
         }
 
 
+        /* -------------------------------------
+           COMPARE
+        ------------------------------------- */
+
         if (
             !oldStation ||
-            oldStation.stream !== newStream
+            oldStation.stream !==
+                newStream
         ) {
 
             console.log("");
@@ -1051,10 +1162,10 @@ async function captureStation(
                 `CHANGED: ${station.name}`
             );
 
-            changed = true;
+            changed =
+                true;
 
-        }
-        else {
+        } else {
 
             console.log("");
             console.log(
@@ -1083,6 +1194,10 @@ async function captureStation(
     await browser.close();
 
 
+    /* -----------------------------------------
+       NO CHANGES
+    ----------------------------------------- */
+
     if (!changed) {
 
         console.log("");
@@ -1095,9 +1210,12 @@ async function captureStation(
         );
 
         process.exit(0);
-
     }
 
+
+    /* -----------------------------------------
+       SAVE
+    ----------------------------------------- */
 
     const output = {
 
