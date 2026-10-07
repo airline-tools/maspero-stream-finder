@@ -1,10 +1,10 @@
 {
-    "updated": "2026-10-07T12:36:43.935Z",
+    "updated": "2026-10-07T13:20:20.778Z",
     "stations": [
         {
             "name": "راديو مصر",
             "frequency": "88.7 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(BtowrEotibfzlo7NKhqNBqvLtYjTIrgScs2bXQdIGo4H2E2YddIWg2ekWDPsGEhW1NxurMxTA5cPHpe9-URRFUqFkwNxZ8ZNrCFELxdj3u7Wv-e6236VpZsA-luQM6eLYAA26JvH5uJCoqYF1p1P5-c5JM-Jn_BIS_Ku2-nASyfGiZj8V8OgL-YdQkGn-5WT)/dm/4/x8n6dpk/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(1HhkJFe-RHOctY4gOLdefucTTpKSRIsOA9zQ1TuGEPc2SK2h-nTS4Jhc2_Cmef-92ffgB2Qk5oLZNxU0Yy5yk7nDIapg_rcsMHfKRzALvpLhFhHDWqONBz6DbI2obQAQYaBT7A3c6If2JbZycIoNy039_jdqXvH-xsSIdKTqUHmXo9i7DLeJLUUSdAp-aWmW)/dm/4/x8n6dpk/live-aac-64.m3u8"
         },
         {
             "name": "الشرق الأوسط",
@@ -14,27 +14,27 @@
         {
             "name": "البرنامج الثقافي ودراما FM",
             "frequency": "91.5 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(gl4576uLxaaq017fsx4Ck9xdxCV9dEhAdeqOcuTqjlxwvX1giHI154baf4eoR6z08tTH9YyqSGXy0ubzRrQvuf3GSX7o03ccbpw7EfyGzT1CWlLn8oWvjfa9fjTGiBlrzJ84oyL2wvVsVCwKYAWWMHzO80bwSDE4ajbxGYLEAYmZjlFxDui4pq_trfzYmRIr)/dm/4/x8n6eci/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(S_xSKipVBo0Jp4vmTHKAxabCT02nR9MbKsNokKcRFT1aIYy2yT3lsKAVHtjnJrdCIk2vuwlY0un-lEjlLWPPvZ-OvC1iiCWAD5cH5Gaw6dgqLFiMySm65_zKP-qh2ctbPAhb6hr9QFfoM_M1FNAJZo_rYrxU2feIANayCGYQvv535aSzvgYxaDrfquQIaDqD)/dm/4/x8n6eci/live-aac-64.m3u8"
         },
         {
             "name": "إذاعة القاهرة الكبرى",
             "frequency": "102.2 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(ZnZdrxOOhspFT_620Z49krq2pNib0A9B09NrG8pUVvg3tW2p3i3hDoBJdgI_FTljCkU2daT0IMka9NlJdeolgSJak4sAJ5RpyQUaVtnm-9_gMa4BZxpQ_J4bSbv1VJymMs7MLh2P7sqU7I7uzJmL-HDoXMweLah9oEWxDmbUssNJ2N3Wpb3lfVLR-UGVyStb)/dm/4/x8n6ebs/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(n0PU9ai8nBT8lf_TBhsjwutsWdei50bgHe6EWlxOJYaHwm0CjHWuuN7YE1HpIt0nAii0JsefavJfW8F5fcublfloNIJVxT2AIKDO5kcbo3ZTtldgAo6yYT4gnx5VeN_pwvCKouwuA74vMHimSacTQdhW1mJd0MnIp76LsCvPNFEO502-Pe_Tc8vfMN4hc2W5)/dm/4/x8n6ebs/live-aac-64.m3u8"
         },
         {
             "name": "الأغاني",
             "frequency": "105.8 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(72OJMLtL755im8qpPyVjXM-lqu4hn9kWAZyp_jibxtuFFkxLZGRssDzgEm66KjxUAz5Tp1PmW7mOvubFcWpTwhkGDH0DfAm1wx5L0Lp7ehzWtK0HG7uZEGg5RvVLJNgjHGz4bbdGYVHfuyTgt0s37krDMzHDltcXlLAhiGeNpB2899MY88TDHxR7wzCTnDCy)/dm/4/x8n6dyz/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(IrN5gB0RbsHHj4NiUdbvfXAh16fZ9IHZ9rIUxOc7xZQnz2ClFgn0sznIycC99GhXdZ5CNOsYnIhwAxhAPuchEUiTtdObnlB7sjP4BKNbSkL-iRvnFiCA6ue2Y5PQshsaLjE228KwO5txwzY_Ncc2u398865WXCVC6XmU8HhXddn858dNyp4aDt9o29BBS_q9)/dm/4/x8n6dyz/live-aac-64.m3u8"
         },
         {
             "name": "إذاعة البرنامج العام",
             "frequency": "107.4 FM",
-            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(Mhijo1F7ozyFAV-gdWgiOEF6U90IsgciFWud-r-1NE75tiu0FWi6w6tqEKhsOKYmIM9gGYDQA4wcOu62ItdUSuYowSq4kbo4RZb7LXszXsg8rs3QMcOY-VxWGPyhnO1uhGvWELMLI7VK3o054sojgBUVQ2StvLEtPiDMRYhEf9jYz_Ap2bKDqS46zVE9sqIo)/dm/4/x8n6dt3/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1b.cf.dmcdn.net/sec2(0tgYnlYOfMFHfbB7XCDG7d1fuNQuKM3h_l4SIZqe2KkOEv7gm8h9DOpCDKkfiKLzl4KtsqfkNwRvBbvjn-bUcdIgzwyw86FtroGO1dYmmVrhScmQwnZog6VtGxVWg7MjbzTTF-l04tmUqXNHXDX2c5XnTX1igfaruLURMlM-5qqL3NOifmDlIScu2bV8c1Ns)/dm/4/x8n6dt3/live-aac-64.m3u8"
         },
         {
             "name": "الشباب والرياضة",
             "frequency": "108 FM",
-            "stream": "https://live.eu-north-1a.cf.dmcdn.net/sec2(ypTh1l6BuhreGc5G6dwhLPQkEXdSeAktgv6uYhi6fSYckZVR46bNGfMh2SIq6RMAl0pioDaTIeXAN1j8cxeoyg0pc7gmlPaB4p9VTbsz-XN8f08rplcM1a4qt2f-rII9EvKE8FB_e2jwTCQckD8jZG13pD5gsvnbzn-aDbB-1kD1jdKelDJ7Tg6r57tUZPZb)/dm/4/x8n6dzo/live-h264-240.m3u8"
+            "stream": "https://live.eu-north-1a.cf.dmcdn.net/sec2(13oHeMaE4-1lZsPurVv3mGV2PhMI90H_LfvwfaB-jp5xckzud8hWor58eCtxN1oHZl-nTDEBOanLzZzHFp-9xdqa5tH9qaiyzMYTmoEia9_sI6mzB30vD1R7IhecDUVSrK0SF8gs27YNKPGdRe-p7B9jdVMuoziEa4hthdYwHBL_bHJMaAiFTPdhlcuTW3vB)/dm/4/x8n6dzo/live-aac-64.m3u8"
         }
     ]
 }
