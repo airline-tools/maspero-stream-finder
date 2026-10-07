@@ -4,34 +4,13 @@ const fs = require("fs");
 const OUTPUT_FILE = "maspero-streams.json";
 
 const STATIONS = [
-    {
-        name: "راديو مصر",
-        url: "https://www.maspero.eg/stream/8"
-    },
-    {
-        name: "الشرق الأوسط",
-        url: "https://www.maspero.eg/stream/9"
-    },
-    {
-        name: "البرنامج الثقافي ودراما FM",
-        url: "https://www.maspero.eg/stream/10"
-    },
-    {
-        name: "إذاعة القاهرة الكبرى",
-        url: "https://www.maspero.eg/stream/11"
-    },
-    {
-        name: "الأغاني",
-        url: "https://www.maspero.eg/stream/12"
-    },
-    {
-        name: "إذاعة البرنامج العام",
-        url: "https://www.maspero.eg/stream/13"
-    },
-    {
-        name: "الشباب والرياضة",
-        url: "https://www.maspero.eg/stream/14"
-    }
+    { name: "راديو مصر", url: "https://www.maspero.eg/stream/8" },
+    { name: "الشرق الأوسط", url: "https://www.maspero.eg/stream/9" },
+    { name: "البرنامج الثقافي ودراما FM", url: "https://www.maspero.eg/stream/10" },
+    { name: "إذاعة القاهرة الكبرى", url: "https://www.maspero.eg/stream/11" },
+    { name: "الأغاني", url: "https://www.maspero.eg/stream/12" },
+    { name: "إذاعة البرنامج العام", url: "https://www.maspero.eg/stream/13" },
+    { name: "الشباب والرياضة", url: "https://www.maspero.eg/stream/14" }
 ];
 
 function sleep(ms) {
@@ -46,29 +25,34 @@ async function main() {
 
     const page = await browser.newPage();
 
-    let results = [];
+    const results = [];
 
     for (const station of STATIONS) {
 
         console.log("");
         console.log("SEARCHING:", station.name);
 
-        let foundUrl = null;
+        let aac128 = null;
+        let aac64 = null;
 
         const handler = request => {
 
             const url = request.url();
 
-            if (
-                /live-aac-128\.m3u8/i.test(url)
-            ) {
+            if (/live-aac-128\.m3u8/i.test(url)) {
 
-                foundUrl = url;
+                aac128 = url;
 
-                console.log("");
                 console.log("AAC-128 FOUND:");
                 console.log(url);
+            }
 
+            else if (/live-aac-64\.m3u8/i.test(url)) {
+
+                aac64 = url;
+
+                console.log("AAC-64 FOUND:");
+                console.log(url);
             }
         };
 
@@ -92,31 +76,40 @@ async function main() {
                 "PAGE ERROR:",
                 error.message
             );
-
         }
 
         page.off("request", handler);
 
-        if (foundUrl) {
+        const selectedUrl =
+            aac128 || aac64;
+
+        if (selectedUrl) {
+
+            const quality =
+                aac128
+                    ? "AAC-128"
+                    : "AAC-64";
+
+            console.log("");
+            console.log("SELECTED:", quality);
+            console.log(selectedUrl);
 
             results.push({
                 name: station.name,
-                url: foundUrl,
-                quality: "AAC-128"
+                url: selectedUrl,
+                quality: quality
             });
 
         } else {
 
             console.log(
-                "AAC-128 NOT FOUND"
+                "NO AAC-128 OR AAC-64 FOUND"
             );
-
         }
 
         await page.goto(
             "about:blank"
         ).catch(() => {});
-
     }
 
     fs.writeFileSync(
