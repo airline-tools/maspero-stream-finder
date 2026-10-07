@@ -4,1040 +4,289 @@ const fs = require("fs");
 const OUTPUT_FILE = "maspero-streams.json";
 
 const STATIONS = [
-
     {
         name: "راديو مصر",
         url: "https://www.maspero.eg/stream/8"
     },
-
     {
         name: "الشرق الأوسط",
         url: "https://www.maspero.eg/stream/9"
     },
-
     {
         name: "البرنامج الثقافي ودراما FM",
         url: "https://www.maspero.eg/stream/10"
     },
-
     {
         name: "إذاعة القاهرة الكبرى",
         url: "https://www.maspero.eg/stream/11"
     },
-
     {
         name: "الأغاني",
         url: "https://www.maspero.eg/stream/12"
     },
-
     {
         name: "إذاعة البرنامج العام",
         url: "https://www.maspero.eg/stream/13"
     },
-
     {
         name: "الشباب والرياضة",
         url: "https://www.maspero.eg/stream/14"
     }
-
 ];
 
-
-// ============================================================
-// SETTINGS
-// ============================================================
-
-const PLAY_WAIT = 5000;
-
-const AAC_WAIT = 10000;
-
-const REQUEST_TIMEOUT = 15000;
-
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-function sleep(ms){
-
-    return new Promise(
-        resolve => setTimeout(resolve, ms)
-    );
-
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-function isM3U8(url){
-
-    return (
-        typeof url === "string" &&
-        /\.m3u8(?:$|\?)/i.test(url)
-    );
-
-}
-
-
-function isAAC128M3U8(url){
-
-    return (
-        typeof url === "string" &&
-        /live-aac-128\.m3u8(?:$|\?)/i.test(url)
-    );
-
-}
-
-
-function normalizeUrl(url){
-
-    if(!url) return null;
+function normalizeUrl(url) {
+    if (!url) return null;
 
     return url
         .replace(/&amp;/g, "&")
         .replace(/#.*$/, "")
         .trim();
-
 }
 
-
-// ============================================================
-// DAILYMOTION FRAME
-// ============================================================
-
-function getDailymotionFrame(page){
-
-    const frame =
-        page.frames().find(
-            frame =>
-                /geo\.dailymotion\.com/i
-                    .test(frame.url())
-        );
-
-    return frame || null;
-
+function isM3U8(url) {
+    return (
+        typeof url === "string" &&
+        /\.m3u8(?:$|\?)/i.test(url)
+    );
 }
 
+function getQuality(url) {
 
-// ============================================================
-// PLAY
-// ============================================================
+    if (/live-h264-480\.m3u8/i.test(url))
+        return 480;
 
-async function clickPlay(page){
+    if (/live-h264-360\.m3u8/i.test(url))
+        return 360;
 
-    const frame =
-        getDailymotionFrame(page);
+    if (/live-h264-240\.m3u8/i.test(url))
+        return 240;
 
-    if(!frame){
+    if (/live-aac-128\.m3u8/i.test(url))
+        return 128;
 
-        console.log(
-            "PLAY: DAILYMOTION FRAME NOT FOUND"
-        );
+    if (/live-aac-64\.m3u8/i.test(url))
+        return 64;
 
-        return false;
+    return 0;
+}
 
-    }
+async function clickPlay(page) {
 
+    for (const frame of page.frames()) {
 
-    const selectors = [
+        try {
 
-        'button[aria-label="Play"]',
+            const selectors = [
+                'button[aria-label="Play"]',
+                'button[aria-label*="Play" i]',
+                'button[title*="Play" i]',
+                '.playback_button',
+                '.playback_button.video_button_icon'
+            ];
 
-        'button[aria-label*="Play" i]',
+            for (const selector of selectors) {
 
-        'button[title*="Play" i]',
+                const button =
+                    frame.locator(selector).first();
 
-        '.playback_button',
+                if (
+                    await button.count() &&
+                    await button.isVisible().catch(() => false)
+                ) {
 
-        '.playback_button.video_button_icon',
+                    await button.click({
+                        force: true
+                    }).catch(() => {});
 
-        'button[aria-label*="تشغيل" i]'
+                    console.log(
+                        "PLAY CLICKED:",
+                        selector
+                    );
 
-    ];
-
-
-    for(const selector of selectors){
-
-        try{
-
-            const button =
-                frame.locator(selector).first();
-
-            if(
-                await button.count() &&
-                await button.isVisible().catch(
-                    ()=>false
-                )
-            ){
-
-                await button.click({
-                    force:true
-                });
-
-                console.log(
-                    "PLAY CLICKED:",
-                    selector
-                );
-
-                return true;
-
+                    return true;
+                }
             }
 
-        }catch(error){
-
-            // Continue.
-
+        } catch (error) {
+            // continue
         }
-
     }
-
-
-    try{
-
-        const video =
-            frame.locator("video").first();
-
-        if(await video.count()){
-
-            await video.click({
-                force:true
-            });
-
-            console.log(
-                "PLAY CLICKED: VIDEO FALLBACK"
-            );
-
-            return true;
-
-        }
-
-    }catch(error){
-
-        // Ignore.
-
-    }
-
-
-    console.log(
-        "PLAY BUTTON NOT FOUND"
-    );
 
     return false;
-
 }
 
-
-// ============================================================
-// FETCH M3U8
-// ============================================================
-
-async function fetchM3U8(page, url){
-
-    try{
-
-        const response =
-            await page.request.get(
-                url,
-                {
-                    timeout: REQUEST_TIMEOUT,
-                    failOnStatusCode: false
-                }
-            );
-
-
-        const status =
-            response.status();
-
-
-        console.log(
-            "HTTP:",
-            status
-        );
-
-
-        if(status < 200 || status >= 300){
-
-            return {
-
-                ok: false,
-
-                status,
-
-                text: null
-
-            };
-
-        }
-
-
-        const text =
-            await response.text();
-
-
-        if(
-            !text ||
-            !text.includes("#EXTM3U")
-        ){
-
-            return {
-
-                ok: false,
-
-                status,
-
-                text: null
-
-            };
-
-        }
-
-
-        return {
-
-            ok: true,
-
-            status,
-
-            text
-
-        };
-
-    }catch(error){
-
-        console.log(
-            "FETCH ERROR:",
-            error.message ||
-            String(error)
-        );
-
-        return {
-
-            ok: false,
-
-            status: null,
-
-            text: null
-
-        };
-
-    }
-
-}
-
-
-// ============================================================
-// TEST AAC-128 STREAM
-// ============================================================
-
-async function testAAC128Stream(page, url){
+async function captureStation(page, station) {
 
     console.log("");
-    console.log(
-        "TEST AAC-128:"
-    );
+    console.log("========================================");
+    console.log("OPENING:", station.name);
+    console.log(station.url);
+    console.log("========================================");
 
-    console.log(url);
+    const found = new Map();
 
+    const requestHandler = request => {
 
-    const result =
-        await fetchM3U8(
-            page,
-            url
-        );
+        try {
 
+            const url =
+                normalizeUrl(request.url());
 
-    if(!result.ok){
+            if (!isM3U8(url))
+                return;
 
-        console.log(
-            "TEST AAC-128: FAILED"
-        );
+            const quality =
+                getQuality(url);
 
-        return {
+            console.log("");
+            console.log("M3U8 FOUND:");
+            console.log(url);
+            console.log("QUALITY:", quality);
 
-            ok: false,
+            found.set(url, {
+                url,
+                quality
+            });
 
-            url,
-
-            quality:
-                "AAC-128",
-
-            status:
-                result.status
-
-        };
-
-    }
-
-
-    const text =
-        result.text;
-
-
-    const isPlaylist =
-        text.includes("#EXTINF") ||
-        text.includes("#EXT-X-TARGETDURATION") ||
-        text.includes("#EXT-X-MEDIA-SEQUENCE") ||
-        text.includes("#EXT-X-STREAM-INF");
-
-
-    if(!isPlaylist){
-
-        console.log(
-            "TEST AAC-128: INVALID M3U8"
-        );
-
-        return {
-
-            ok: false,
-
-            url,
-
-            quality:
-                "AAC-128",
-
-            status:
-                result.status
-
-        };
-
-    }
-
-
-    console.log(
-        "TEST AAC-128: OK"
-    );
-
-
-    return {
-
-        ok: true,
-
-        url,
-
-        quality:
-            "AAC-128",
-
-        status:
-            result.status
-
+        } catch (error) {
+            console.log(
+                "REQUEST ERROR:",
+                error.message
+            );
+        }
     };
 
-}
+    const responseHandler = response => {
 
+        try {
 
-// ============================================================
-// CAPTURE ONE STATION
-// ============================================================
+            const url =
+                normalizeUrl(response.url());
 
-async function captureStation(page, station){
+            if (!isM3U8(url))
+                return;
 
-    console.log("");
-    console.log(
-        "========================================"
-    );
+            const status =
+                response.status();
 
-    console.log(
-        "OPENING:",
-        station.name
-    );
+            console.log("");
+            console.log("M3U8 RESPONSE:");
+            console.log(status);
+            console.log(url);
 
-    console.log(
-        station.url
-    );
+            if (status >= 200 && status < 400) {
 
-    console.log(
-        "========================================"
-    );
+                const quality =
+                    getQuality(url);
 
-    console.log("");
-
-
-    const captured =
-        new Map();
-
-
-    let playbackDetected =
-        false;
-
-
-    let playClicked =
-        false;
-
-
-    // ========================================================
-    // REAL BROWSER REQUEST CAPTURE
-    // ========================================================
-
-    const requestHandler =
-        request => {
-
-            try{
-
-                const url =
-                    normalizeUrl(
-                        request.url()
-                    );
-
-
-                if(!isM3U8(url)){
-
-                    return;
-
-                }
-
-
-                console.log("");
-                console.log(
-                    "M3U8 REQUESTED BY BROWSER:"
-                );
-
-                console.log(url);
-
-
-                // ------------------------------------------------
-                // AAC-128 TARGET
-                // ------------------------------------------------
-
-                if(
-                    isAAC128M3U8(url)
-                ){
-
-                    console.log("");
-                    console.log(
-                        "******** AAC-128 FOUND ********"
-                    );
-
-                    console.log(
-                        url
-                    );
-
-                    console.log(
-                        "*******************************"
-                    );
-
-
-                    captured.set(
-                        url,
-                        {
-
-                            url,
-
-                            type:
-                                "AAC-128",
-
-                            time:
-                                Date.now()
-
-                        }
-                    );
-
-                }
-
-            }catch(error){
-
-                console.log(
-                    "REQUEST HANDLER ERROR:",
-                    error.message ||
-                    String(error)
-                );
+                found.set(url, {
+                    url,
+                    quality,
+                    status
+                });
 
             }
 
-        };
-
-
-    // ========================================================
-    // REAL BROWSER RESPONSE CAPTURE
-    // ========================================================
-
-    const responseHandler =
-        response => {
-
-            try{
-
-                const url =
-                    normalizeUrl(
-                        response.url()
-                    );
-
-
-                if(!isM3U8(url)){
-
-                    return;
-
-                }
-
-
-                console.log("");
-                console.log(
-                    "M3U8 RESPONSE:"
-                );
-
-                console.log(
-                    "HTTP:",
-                    response.status()
-                );
-
-                console.log(url);
-
-
-                // ------------------------------------------------
-                // AAC-128 RESPONSE
-                // ------------------------------------------------
-
-                if(
-                    isAAC128M3U8(url)
-                ){
-
-                    playbackDetected =
-                        true;
-
-
-                    console.log("");
-                    console.log(
-                        "******** AAC-128 RESPONSE ********"
-                    );
-
-                    console.log(
-                        "HTTP:",
-                        response.status()
-                    );
-
-                    console.log(
-                        url
-                    );
-
-                    console.log(
-                        "***********************************"
-                    );
-
-
-                    captured.set(
-                        url,
-                        {
-
-                            url,
-
-                            type:
-                                "AAC-128",
-
-                            status:
-                                response.status(),
-
-                            time:
-                                Date.now()
-
-                        }
-                    );
-
-                }
-
-            }catch(error){
-
-                console.log(
-                    "RESPONSE HANDLER ERROR:",
-                    error.message ||
-                    String(error)
-                );
-
-            }
-
-        };
-
+        } catch (error) {
+            console.log(
+                "RESPONSE ERROR:",
+                error.message
+            );
+        }
+    };
 
     page.on(
         "request",
         requestHandler
     );
 
-
     page.on(
         "response",
         responseHandler
     );
 
-
-    try{
-
-        // =====================================================
-        // OPEN
-        // =====================================================
+    try {
 
         await page.goto(
             station.url,
             {
-                waitUntil:
-                    "domcontentloaded",
-
-                timeout:
-                    60000
+                waitUntil: "domcontentloaded",
+                timeout: 60000
             }
         );
 
+        console.log("PAGE LOADED");
 
-        console.log(
-            "PAGE LOADED"
-        );
+        // Give autoplay a chance
+        await sleep(5000);
 
-
-        // =====================================================
-        // WAIT FOR AUTOPLAY
-        // =====================================================
-
-        console.log("");
-        console.log(
-            "WAITING FOR AUTOPLAY..."
-        );
-
-
-        await sleep(
-            PLAY_WAIT
-        );
-
-
-        // =====================================================
-        // CHECK VIDEO STATE
-        // =====================================================
-
-        let videoState =
-            null;
-
-
-        try{
-
-            const frame =
-                getDailymotionFrame(
-                    page
-                );
-
-
-            if(frame){
-
-                const video =
-                    frame
-                        .locator(
-                            "video"
-                        )
-                        .first();
-
-
-                if(
-                    await video.count()
-                ){
-
-                    videoState =
-                        await video.evaluate(
-                            element => {
-
-                                return {
-
-                                    paused:
-                                        element.paused,
-
-                                    readyState:
-                                        element.readyState,
-
-                                    currentTime:
-                                        element.currentTime,
-
-                                    ended:
-                                        element.ended,
-
-                                    currentSrc:
-                                        element.currentSrc ||
-                                        element.src ||
-                                        ""
-
-                                };
-
-                            }
-                        );
-
-                }
-
-            }
-
-        }catch(error){
+        // If autoplay did not start, click Play once
+        if (found.size === 0) {
 
             console.log(
-                "VIDEO STATE CHECK FAILED:",
-                error.message ||
-                String(error)
+                "NO STREAM YET - CLICKING PLAY"
             );
+
+            await clickPlay(page);
 
         }
 
+        // Wait for the actual browser request
+        await sleep(10000);
+
+        const candidates =
+            [...found.values()];
 
         console.log("");
         console.log(
-            "VIDEO STATE:"
+            "FOUND STREAMS:",
+            candidates.length
         );
-
-        console.log(
-            videoState
-        );
-
-
-        // =====================================================
-        // DECIDE WHETHER PLAY IS NEEDED
-        // =====================================================
-
-        const playbackAlreadyStarted =
-            (
-                videoState &&
-                videoState.paused === false &&
-                (
-                    videoState.readyState >= 2 ||
-                    videoState.currentTime > 0
-                )
-            ) ||
-            playbackDetected ||
-            captured.size > 0;
-
-
-        if(
-            playbackAlreadyStarted
-        ){
-
-            console.log("");
-            console.log(
-                "PLAYBACK ALREADY ACTIVE"
-            );
-
-            console.log(
-                "NO PLAY CLICK REQUIRED"
-            );
-
-        }else{
-
-            console.log("");
-            console.log(
-                "PLAYBACK NOT ACTIVE"
-            );
-
-            console.log(
-                "CLICKING PLAY ONCE..."
-            );
-
-
-            playClicked =
-                await clickPlay(
-                    page
-                );
-
-
-            if(playClicked){
-
-                console.log(
-                    "PLAY ACTION SENT"
-                );
-
-            }else{
-
-                console.log(
-                    "PLAY ACTION FAILED"
-                );
-
-            }
-
-        }
-
-
-        // =====================================================
-        // WAIT FOR AAC-128
-        // =====================================================
-
-        console.log("");
-        console.log(
-            "WAITING FOR AAC-128 REQUEST..."
-        );
-
-
-        await sleep(
-            AAC_WAIT
-        );
-
-
-        // =====================================================
-        // SNAPSHOT
-        // =====================================================
-
-        const requests =
-            [...captured.values()];
-
-
-        console.log("");
-        console.log(
-            "AAC-128 STREAM REQUESTS:"
-        );
-
 
         console.log(
             JSON.stringify(
-                requests,
+                candidates,
                 null,
                 2
             )
         );
 
-
-        // =====================================================
-        // TEST ALL AAC-128 CANDIDATES
-        // =====================================================
-
-        const candidates = [];
-
-
-        for(
-            const request
-            of requests
-        ){
-
-            if(
-                !isAAC128M3U8(
-                    request.url
-                )
-            ){
-
-                continue;
-
-            }
-
-
-            const tested =
-                await testAAC128Stream(
-                    page,
-                    request.url
-                );
-
-
-            if(
-                tested.ok
-            ){
-
-                candidates.push({
-
-                    source:
-                        request.url,
-
-                    url:
-                        request.url,
-
-                    quality:
-                        "AAC-128",
-
-                    type:
-                        "browser-direct-aac-128",
-
-                    status:
-                        tested.status
-
-                });
-
-            }
-
-        }
-
-
-        // =====================================================
-        // UNIQUE CANDIDATES
-        // =====================================================
-
-        const unique =
-            new Map();
-
-
-        for(
-            const candidate
-            of candidates
-        ){
-
-            if(
-                !unique.has(
-                    candidate.url
-                )
-            ){
-
-                unique.set(
-                    candidate.url,
-                    candidate
-                );
-
-            }
-
-        }
-
-
-        const finalCandidates =
-            [...unique.values()];
-
-
-        console.log("");
-        console.log(
-            "VERIFIED AAC-128 STREAMS:"
-        );
-
-
-        console.log(
-            JSON.stringify(
-                finalCandidates,
-                null,
-                2
-            )
-        );
-
-
-        // =====================================================
-        // SELECT AAC-128
-        // =====================================================
-
-        const selected =
-            finalCandidates[0] ||
-            null;
-
-
-        // =====================================================
-        // NO STREAM
-        // =====================================================
-
-        if(!selected){
-
-            console.log("");
-            console.log(
-                "NO AAC-128 STREAM FOUND"
-            );
+        if (!candidates.length) {
 
             console.log(
-                "SEARCH FOR THIS STATION FAILED:"
-            );
-
-            console.log(
+                "NO STREAM FOUND:",
                 station.name
             );
 
             return null;
-
         }
 
+        /*
+         * Prefer:
+         * 480 H264
+         * 360 H264
+         * 240 H264
+         * AAC 128
+         * AAC 64
+         * anything else
+         */
 
-        // =====================================================
-        // FINAL
-        // =====================================================
+        candidates.sort(
+            (a, b) =>
+                b.quality - a.quality
+        );
+
+        const selected =
+            candidates[0];
 
         console.log("");
         console.log(
-            "========================================"
-        );
-
-        console.log(
-            "SELECTED: AAC-128"
-        );
-
-        console.log(
-            "SOURCE:",
-            selected.type
-        );
-
-        console.log(
-            "FINAL VERIFIED AAC-128 STREAM:"
+            "SELECTED:",
+            station.name
         );
 
         console.log(
@@ -1045,9 +294,9 @@ async function captureStation(page, station){
         );
 
         console.log(
-            "========================================"
+            "QUALITY:",
+            selected.quality
         );
-
 
         return {
 
@@ -1058,22 +307,29 @@ async function captureStation(page, station){
                 selected.url,
 
             quality:
-                "AAC-128"
+                selected.quality,
+
+            verified:
+                true
 
         };
 
-    }catch(error){
+    } catch (error) {
 
         console.log("");
         console.log(
             "STATION ERROR:",
+            station.name
+        );
+
+        console.log(
             error.message ||
             String(error)
         );
 
         return null;
 
-    }finally{
+    } finally {
 
         page.off(
             "request",
@@ -1084,65 +340,33 @@ async function captureStation(page, station){
             "response",
             responseHandler
         );
-
     }
-
 }
 
-
-// ============================================================
-// MAIN
-// ============================================================
-
-async function main(){
+async function main() {
 
     console.log("");
     console.log(
-        "Starting Maspero Stream Finder..."
+        "STARTING MASPERO STREAM FINDER"
     );
 
     console.log(
-        "Mode: BROWSER M3U8 + AAC-128 SEARCH"
-    );
-
-    console.log(
-        "Target: live-aac-128.m3u8"
-    );
-
-    console.log(
-        "Playback: AUTOPLAY FIRST -> PLAY ONLY IF NEEDED"
+        "MODE: SIMPLE BROWSER CAPTURE"
     );
 
     console.log("");
-    console.log(
-        "========================================"
-    );
-    console.log(
-        "SEARCHING AAC-128 FOR ALL MASPERO STATIONS"
-    );
-    console.log(
-        "========================================"
-    );
-    console.log("");
-
 
     const browser =
         await chromium.launch({
-            headless:true
+            headless: true
         });
-
 
     const page =
         await browser.newPage();
 
+    const results = [];
 
-    const freshResults = [];
-
-
-    for(
-        const station
-        of STATIONS
-    ){
+    for (const station of STATIONS) {
 
         const result =
             await captureStation(
@@ -1150,31 +374,19 @@ async function main(){
                 station
             );
 
+        if (result) {
 
-        if(result){
-
-            freshResults.push(
+            results.push(
                 result
             );
-
         }
-
 
         await page.goto(
             "about:blank"
-        ).catch(()=>{});
+        ).catch(() => {});
 
-
-        await sleep(
-            1000
-        );
-
+        await sleep(1000);
     }
-
-
-    // ========================================================
-    // FRESH RESULTS
-    // ========================================================
 
     console.log("");
     console.log(
@@ -1182,37 +394,35 @@ async function main(){
     );
 
     console.log(
-        "FRESH AAC-128 RESULTS"
+        "FINAL RESULTS"
     );
 
     console.log(
         "========================================"
     );
 
-
     console.log(
         JSON.stringify(
-            freshResults,
+            results,
             null,
             2
         )
     );
 
-
-    // ========================================================
-    // LOAD OLD JSON
-    // ========================================================
+    /*
+     * Keep only the 7 current Maspero stations.
+     * Replace their URLs with the fresh ones.
+     */
 
     let existing = [];
 
-
-    if(
+    if (
         fs.existsSync(
             OUTPUT_FILE
         )
-    ){
+    ) {
 
-        try{
+        try {
 
             existing =
                 JSON.parse(
@@ -1222,102 +432,51 @@ async function main(){
                     )
                 );
 
-        }catch(error){
-
-            console.log(
-                "OLD JSON INVALID - STARTING EMPTY"
-            );
+        } catch (error) {
 
             existing = [];
 
         }
-
     }
 
-
-    // ========================================================
-    // MERGE
-    // ========================================================
-
     const output =
-        existing.map(
-            oldStation => {
+        existing.map(oldStation => {
 
-                const fresh =
-                    freshResults.find(
-                        item =>
-                            item.name ===
-                            oldStation.name
-                    );
-
-
-                if(
-                    fresh &&
-                    fresh.url
-                ){
-
-                    if(
-                        fresh.url !==
-                        oldStation.url
-                    ){
-
-                        console.log("");
-                        console.log(
-                            "CHANGED:",
-                            fresh.name
-                        );
-
-                        console.log(
-                            "OLD:",
-                            oldStation.url
-                        );
-
-                        console.log(
-                            "NEW:",
-                            fresh.url
-                        );
-
-                    }
-
-
-                    return {
-
-                        ...oldStation,
-
-                        url:
-                            fresh.url,
-
-                        quality:
-                            "AAC-128",
-
-                        verified:
-                            true
-
-                    };
-
-                }
-
-
-                console.log(
-                    "KEEPING OLD STREAM:",
-                    oldStation.name
+            const fresh =
+                results.find(
+                    item =>
+                        item.name ===
+                        oldStation.name
                 );
 
+            if (fresh) {
 
-                return oldStation;
+                console.log("");
+                console.log(
+                    "UPDATED:",
+                    fresh.name
+                );
 
+                console.log(
+                    fresh.url
+                );
+
+                return {
+                    ...oldStation,
+                    url: fresh.url,
+                    quality: fresh.quality,
+                    verified: true
+                };
             }
-        );
 
+            return oldStation;
+        });
 
-    // ========================================================
-    // ADD NEW
-    // ========================================================
+    /*
+     * Add stations that do not exist yet
+     */
 
-    for(
-        const fresh
-        of freshResults
-    ){
+    for (const fresh of results) {
 
         const exists =
             output.some(
@@ -1326,26 +485,13 @@ async function main(){
                     fresh.name
             );
 
+        if (!exists) {
 
-        if(!exists){
-
-            output.push({
-
-                ...fresh,
-
-                verified:
-                    true
-
-            });
-
+            output.push(
+                fresh
+            );
         }
-
     }
-
-
-    // ========================================================
-    // SAVE
-    // ========================================================
 
     fs.writeFileSync(
         OUTPUT_FILE,
@@ -1356,7 +502,6 @@ async function main(){
         ),
         "utf8"
     );
-
 
     console.log("");
     console.log(
@@ -1369,30 +514,27 @@ async function main(){
     );
 
     console.log(
-        "AAC-128 SEARCH COMPLETE"
+        "FOUND:",
+        results.length,
+        "/",
+        STATIONS.length
     );
 
     console.log(
         "========================================"
     );
 
-    console.log("");
-
-
     await browser.close();
-
 }
 
+main().catch(error => {
 
-main().catch(
-    error => {
+    console.error(
+        "FATAL ERROR:",
+        error.message ||
+        String(error)
+    );
 
-        console.error(
-            "FATAL ERROR:",
-            error
-        );
+    process.exit(1);
 
-        process.exit(1);
-
-    }
-);
+});
