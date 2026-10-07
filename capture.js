@@ -7,15 +7,16 @@ const { chromium } = require("playwright");
 
     const page = await browser.newPage();
 
-    const streams = [];
+    const streams = new Set();
 
     page.on("request", request => {
         const url = request.url();
 
-        if (/\.m3u8(?:[?#]|$)/i.test(url)) {
-            console.log("M3U8 FOUND:");
-            console.log(url);
-            streams.push(url);
+        if (
+            /\.m3u8(?:[?#]|$)/i.test(url) &&
+            /live-aac-64\.m3u8/i.test(url)
+        ) {
+            streams.add(url);
         }
     });
 
@@ -33,15 +34,25 @@ const { chromium } = require("playwright");
 
     await page.waitForTimeout(20000);
 
-    if (streams.length === 0) {
-        console.log("NO M3U8 FOUND");
-    } else {
-        console.log(`FOUND ${streams.length} M3U8 STREAM(S)`);
+    const results = [...streams];
 
-        streams.forEach((url, index) => {
-            console.log(`${index + 1}: ${url}`);
-        });
+    console.log(`AAC STREAMS FOUND: ${results.length}`);
+
+    if (results.length === 0) {
+        console.log("NO AAC M3U8 FOUND");
+    } else {
+
+        // آخر رابط ملتقط
+        const stream = results[results.length - 1];
+
+        console.log("");
+        console.log("======================================");
+        console.log("FINAL M3U8 STREAM:");
+        console.log(stream);
+        console.log("======================================");
+        console.log("");
     }
 
     await browser.close();
+
 })();
