@@ -115,6 +115,7 @@ function normalizeUrl(url){
 
     return url
         .replace(/&amp;/g, "&")
+        .replace(/#.*$/, "")
         .trim();
 
 }
@@ -391,10 +392,6 @@ async function testStream(page, url, quality){
         result.text;
 
 
-    // --------------------------------------------------------
-    // Make sure this is actually an HLS playlist.
-    // --------------------------------------------------------
-
     const isPlaylist =
         text.includes("#EXTINF") ||
         text.includes("#EXT-X-TARGETDURATION") ||
@@ -531,10 +528,12 @@ function parseMasterPlaylist(text, baseUrl){
             try{
 
                 url =
-                    new URL(
-                        lines[j],
-                        baseUrl
-                    ).href;
+                    normalizeUrl(
+                        new URL(
+                            lines[j],
+                            baseUrl
+                        ).href
+                    );
 
             }catch(error){
 
@@ -567,9 +566,6 @@ function parseMasterPlaylist(text, baseUrl){
 
         }
 
-
-        // Some manifests may not expose
-        // resolution. Try URL as fallback.
 
         if(!quality){
 
@@ -724,10 +720,6 @@ async function resolveAndVerifyM3U8(
             );
 
 
-        // ----------------------------------------------------
-        // Preferred qualities first.
-        // ----------------------------------------------------
-
         const priority = [];
 
 
@@ -751,10 +743,6 @@ async function resolveAndVerifyM3U8(
         }
 
 
-        // ----------------------------------------------------
-        // Then any other qualities.
-        // ----------------------------------------------------
-
         for(
             const variant
             of ordered
@@ -776,10 +764,6 @@ async function resolveAndVerifyM3U8(
 
         }
 
-
-        // ----------------------------------------------------
-        // TEST EVERY VARIANT.
-        // ----------------------------------------------------
 
         for(
             const variant
@@ -920,6 +904,18 @@ async function captureStation(page, station){
         new Map();
 
 
+    let playbackDetected =
+        false;
+
+
+    let playClicked =
+        false;
+
+
+    // ========================================================
+    // REAL BROWSER REQUEST CAPTURE
+    // ========================================================
+
     const requestHandler =
         request => {
 
@@ -944,7 +940,7 @@ async function captureStation(page, station){
 
             console.log("");
             console.log(
-                "M3U8 REQUESTED"
+                "M3U8 REQUESTED BY BROWSER"
             );
 
             console.log(url);
@@ -976,9 +972,80 @@ async function captureStation(page, station){
         };
 
 
+    // ========================================================
+    // REAL BROWSER RESPONSE CAPTURE
+    // ========================================================
+
+    const responseHandler =
+        response => {
+
+            try{
+
+                const url =
+                    normalizeUrl(
+                        response.url()
+                    );
+
+
+                if(!isM3U8(url)){
+
+                    return;
+
+                }
+
+
+                const quality =
+                    getQualityFromUrl(
+                        url
+                    );
+
+
+                if(quality){
+
+                    playbackDetected =
+                        true;
+
+                }
+
+
+                console.log("");
+                console.log(
+                    "M3U8 RESPONSE:"
+                );
+
+                console.log(
+                    "HTTP:",
+                    response.status()
+                );
+
+                console.log(url);
+
+                if(quality){
+
+                    console.log(
+                        `H264 ${quality} RESPONSE`
+                    );
+
+                }
+
+            }catch(error){
+
+                // Ignore.
+
+            }
+
+        };
+
+
     page.on(
         "request",
         requestHandler
+    );
+
+
+    page.on(
+        "response",
+        responseHandler
     );
 
 
@@ -1005,46 +1072,214 @@ async function captureStation(page, station){
         );
 
 
+        // =====================================================
+        // WAIT FOR AUTOPLAY
+        // =====================================================
+
+        console.log("");
+        console.log(
+            "WAITING FOR AUTOPLAY..."
+        );
+
+
         await sleep(
             PLAY_WAIT
         );
 
 
         // =====================================================
-        // PLAY
+        // INITIAL REQUESTS
         // =====================================================
 
-        console.log("");
-        console.log(
-            "STARTING PLAYBACK..."
-        );
+        const initialRequests =
+            [...captured.values()];
 
 
-        const clicked =
-            await clickPlay(page);
+        if(
+            initialRequests.length
+        ){
 
-
-        if(!clicked){
+            console.log("");
+            console.log(
+                "STREAM REQUESTS AFTER OPEN:"
+            );
 
             console.log(
-                "COULD NOT CLICK PLAY"
+                JSON.stringify(
+                    initialRequests,
+                    null,
+                    2
+                )
+            );
+
+        }else{
+
+            console.log("");
+            console.log(
+                "NO M3U8 REQUEST AFTER OPEN"
             );
 
         }
 
 
         // =====================================================
-        // WAIT FOR MORE REQUESTS
+        // CHECK VIDEO STATE
         // =====================================================
 
-        await sleep(
-            3000
-        );
+        let videoState =
+            null;
+
+
+        try{
+
+            const frame =
+                getDailymotionFrame(
+                    page
+                );
+
+
+            if(frame){
+
+                const video =
+                    frame
+                        .locator(
+                            "video"
+                        )
+                        .first();
+
+
+                if(
+                    await video.count()
+                ){
+
+                    videoState =
+                        await video.evaluate(
+                            element => {
+
+                                return {
+
+                                    paused:
+                                        element.paused,
+
+                                    readyState:
+                                        element.readyState,
+
+                                    currentTime:
+                                        element.currentTime,
+
+                                    ended:
+                                        element.ended,
+
+                                    currentSrc:
+                                        element.currentSrc ||
+                                        element.src ||
+                                        ""
+
+                                };
+
+                            }
+                        );
+
+                }
+
+            }
+
+        }catch(error){
+
+            console.log(
+                "VIDEO STATE CHECK FAILED:",
+                error.message ||
+                String(error)
+            );
+
+        }
 
 
         console.log("");
         console.log(
-            "WAITING FOR M3U8 / QUALITY..."
+            "VIDEO STATE:"
+        );
+
+        console.log(
+            videoState
+        );
+
+
+        // =====================================================
+        // DECIDE WHETHER PLAY IS NEEDED
+        // =====================================================
+
+        const playbackAlreadyStarted =
+            (
+                videoState &&
+                videoState.paused === false &&
+                (
+                    videoState.readyState >= 2 ||
+                    videoState.currentTime > 0
+                )
+            ) ||
+            playbackDetected ||
+            initialRequests.some(
+                item =>
+                    item.quality
+            );
+
+
+        if(
+            playbackAlreadyStarted
+        ){
+
+            console.log("");
+            console.log(
+                "PLAYBACK ALREADY ACTIVE"
+            );
+
+            console.log(
+                "NO PLAY CLICK REQUIRED"
+            );
+
+        }else{
+
+            console.log("");
+            console.log(
+                "PLAYBACK NOT ACTIVE"
+            );
+
+            console.log(
+                "CLICKING PLAY ONCE..."
+            );
+
+
+            playClicked =
+                await clickPlay(
+                    page
+                );
+
+
+            if(playClicked){
+
+                console.log(
+                    "PLAY ACTION SENT"
+                );
+
+            }else{
+
+                console.log(
+                    "PLAY ACTION FAILED"
+                );
+
+            }
+
+        }
+
+
+        // =====================================================
+        // WAIT FOR REAL BROWSER REQUESTS
+        // =====================================================
+
+        console.log("");
+        console.log(
+            "WAITING FOR REAL STREAM REQUESTS..."
         );
 
 
@@ -1077,64 +1312,11 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // ANALYZE ALL M3U8
+        // DIRECT BROWSER H264 STREAMS
         // =====================================================
 
-        const candidates = [];
+        const directCandidates = [];
 
-
-        for(
-            const request
-            of requests
-        ){
-
-            if(
-                !isM3U8(
-                    request.url
-                )
-            ){
-
-                continue;
-
-            }
-
-
-            const resolved =
-                await resolveAndVerifyM3U8(
-                    page,
-                    request.url
-                );
-
-
-            if(
-                resolved &&
-                resolved.url
-            ){
-
-                candidates.push({
-
-                    source:
-                        request.url,
-
-                    url:
-                        resolved.url,
-
-                    quality:
-                        resolved.quality,
-
-                    type:
-                        resolved.type
-
-                });
-
-            }
-
-        }
-
-
-        // =====================================================
-        // DIRECT H264 REQUESTS
-        // =====================================================
 
         for(
             const request
@@ -1163,23 +1345,6 @@ async function captureStation(page, station){
             }
 
 
-            const alreadyTested =
-                candidates.some(
-                    candidate =>
-                        candidate.url ===
-                        request.url
-                );
-
-
-            if(
-                alreadyTested
-            ){
-
-                continue;
-
-            }
-
-
             const tested =
                 await testStream(
                     page,
@@ -1192,7 +1357,7 @@ async function captureStation(page, station){
                 tested.ok
             ){
 
-                candidates.push({
+                directCandidates.push({
 
                     source:
                         request.url,
@@ -1203,7 +1368,7 @@ async function captureStation(page, station){
                     quality,
 
                     type:
-                        "direct-h264-verified"
+                        "browser-direct-h264"
 
                 });
 
@@ -1213,43 +1378,10 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // REMOVE DUPLICATES
+        // SORT DIRECT CANDIDATES
         // =====================================================
 
-        const unique =
-            new Map();
-
-
-        for(
-            const candidate
-            of candidates
-        ){
-
-            if(
-                !unique.has(
-                    candidate.url
-                )
-            ){
-
-                unique.set(
-                    candidate.url,
-                    candidate
-                );
-
-            }
-
-        }
-
-
-        const finalCandidates =
-            [...unique.values()];
-
-
-        // =====================================================
-        // SORT
-        // =====================================================
-
-        finalCandidates.sort(
+        directCandidates.sort(
             (a,b) => {
 
                 const aq =
@@ -1280,13 +1412,13 @@ async function captureStation(page, station){
 
         console.log("");
         console.log(
-            "AVAILABLE VERIFIED CANDIDATES:"
+            "VERIFIED BROWSER H264 STREAMS:"
         );
 
 
         console.log(
             JSON.stringify(
-                finalCandidates,
+                directCandidates,
                 null,
                 2
             )
@@ -1294,10 +1426,11 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // PREFERRED QUALITY
+        // SELECT BROWSER STREAM
         // =====================================================
 
-        let selected = null;
+        let selected =
+            null;
 
 
         for(
@@ -1306,7 +1439,7 @@ async function captureStation(page, station){
         ){
 
             selected =
-                finalCandidates.find(
+                directCandidates.find(
                     candidate =>
                         candidate.quality ===
                         preferred
@@ -1322,14 +1455,172 @@ async function captureStation(page, station){
         }
 
 
+        // =====================================================
+        // FALLBACK TO MASTER ANALYSIS
+        // =====================================================
+
         if(!selected){
 
-            selected =
-                finalCandidates[0] ||
-                null;
+            console.log("");
+            console.log(
+                "NO DIRECT BROWSER H264 SELECTED"
+            );
+
+            console.log(
+                "FALLING BACK TO M3U8 ANALYSIS..."
+            );
+
+
+            const candidates = [];
+
+
+            for(
+                const request
+                of requests
+            ){
+
+                if(
+                    !isM3U8(
+                        request.url
+                    )
+                ){
+
+                    continue;
+
+                }
+
+
+                const resolved =
+                    await resolveAndVerifyM3U8(
+                        page,
+                        request.url
+                    );
+
+
+                if(
+                    resolved &&
+                    resolved.url
+                ){
+
+                    candidates.push({
+
+                        source:
+                            request.url,
+
+                        url:
+                            resolved.url,
+
+                        quality:
+                            resolved.quality,
+
+                        type:
+                            resolved.type
+
+                    });
+
+                }
+
+            }
+
+
+            // -------------------------------------------------
+            // UNIQUE
+            // -------------------------------------------------
+
+            const unique =
+                new Map();
+
+
+            for(
+                const candidate
+                of candidates
+            ){
+
+                if(
+                    !unique.has(
+                        candidate.url
+                    )
+                ){
+
+                    unique.set(
+                        candidate.url,
+                        candidate
+                    );
+
+                }
+
+            }
+
+
+            const finalCandidates =
+                [...unique.values()];
+
+
+            finalCandidates.sort(
+                (a,b) => {
+
+                    const aq =
+                        Number.isFinite(
+                            a.quality
+                        )
+                        ?
+                        a.quality
+                        :
+                        0;
+
+
+                    const bq =
+                        Number.isFinite(
+                            b.quality
+                        )
+                        ?
+                        b.quality
+                        :
+                        0;
+
+
+                    return bq - aq;
+
+                }
+            );
+
+
+            for(
+                const preferred
+                of PREFERRED_QUALITIES
+            ){
+
+                selected =
+                    finalCandidates.find(
+                        candidate =>
+                            candidate.quality ===
+                            preferred
+                    );
+
+
+                if(selected){
+
+                    break;
+
+                }
+
+            }
+
+
+            if(!selected){
+
+                selected =
+                    finalCandidates[0] ||
+                    null;
+
+            }
 
         }
 
+
+        // =====================================================
+        // NO STREAM
+        // =====================================================
 
         if(!selected){
 
@@ -1359,6 +1650,11 @@ async function captureStation(page, station){
                 `H264 ${selected.quality}`
                 :
                 "UNKNOWN"
+        );
+
+        console.log(
+            "SOURCE:",
+            selected.type
         );
 
         console.log(
@@ -1405,6 +1701,11 @@ async function captureStation(page, station){
             requestHandler
         );
 
+        page.off(
+            "response",
+            responseHandler
+        );
+
     }
 
 }
@@ -1422,11 +1723,15 @@ async function main(){
     );
 
     console.log(
-        "Mode: M3U8 + REAL STREAM VERIFICATION"
+        "Mode: BROWSER M3U8 + REAL STREAM VERIFICATION"
     );
 
     console.log(
         "Priority: 480 > 360 > 240"
+    );
+
+    console.log(
+        "Playback: AUTOPLAY FIRST -> PLAY ONLY IF NEEDED"
     );
 
     console.log("");
@@ -1652,7 +1957,6 @@ async function main(){
     );
 
     console.log("");
-
 
     await browser.close();
 
