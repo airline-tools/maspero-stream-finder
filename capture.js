@@ -55,7 +55,7 @@ const PREFERRED_QUALITIES = [
 
 const PLAY_WAIT = 5000;
 
-const QUALITY_WAIT = 15000;
+const QUALITY_WAIT = 10000;
 
 const REQUEST_TIMEOUT = 15000;
 
@@ -211,8 +211,6 @@ async function clickPlay(page){
     }
 
 
-    // Fallback: click the video.
-
     try{
 
         const video =
@@ -249,86 +247,6 @@ async function clickPlay(page){
 
 
 // ============================================================
-// VERIFY PLAYBACK
-// ============================================================
-
-async function verifyPlayback(page){
-
-    const frame =
-        getDailymotionFrame(page);
-
-    if(!frame){
-
-        return false;
-
-    }
-
-
-    for(let i = 0; i < 10; i++){
-
-        try{
-
-            const state =
-                await frame
-                    .locator("video, audio")
-                    .evaluateAll(
-                        elements =>
-                            elements.map(
-                                media => ({
-                                    paused:
-                                        media.paused,
-
-                                    readyState:
-                                        media.readyState,
-
-                                    currentTime:
-                                        media.currentTime
-                                })
-                            )
-                    );
-
-
-            const playing =
-                state.some(
-                    media =>
-                        !media.paused &&
-                        media.readyState >= 2 &&
-                        media.currentTime > 0
-                );
-
-
-            if(playing){
-
-                console.log(
-                    "PLAYBACK CONFIRMED"
-                );
-
-                return true;
-
-            }
-
-        }catch(error){
-
-            // Continue.
-
-        }
-
-
-        await sleep(1000);
-
-    }
-
-
-    console.log(
-        "PLAYBACK NOT CONFIRMED"
-    );
-
-    return false;
-
-}
-
-
-// ============================================================
 // FETCH M3U8
 // ============================================================
 
@@ -340,8 +258,8 @@ async function fetchM3U8(page, url){
             await page.request.get(
                 url,
                 {
-                    timeout:REQUEST_TIMEOUT,
-                    failOnStatusCode:false
+                    timeout: REQUEST_TIMEOUT,
+                    failOnStatusCode: false
                 }
             );
 
@@ -350,14 +268,23 @@ async function fetchM3U8(page, url){
             response.status();
 
 
+        console.log(
+            "HTTP:",
+            status
+        );
+
+
         if(status < 200 || status >= 300){
 
-            console.log(
-                "M3U8 HTTP:",
-                status
-            );
+            return {
 
-            return null;
+                ok: false,
+
+                status,
+
+                text: null
+
+            };
 
         }
 
@@ -366,19 +293,154 @@ async function fetchM3U8(page, url){
             await response.text();
 
 
-        return text;
+        if(
+            !text ||
+            !text.includes("#EXTM3U")
+        ){
+
+            return {
+
+                ok: false,
+
+                status,
+
+                text: null
+
+            };
+
+        }
+
+
+        return {
+
+            ok: true,
+
+            status,
+
+            text
+
+        };
 
     }catch(error){
 
         console.log(
-            "M3U8 FETCH ERROR:",
+            "FETCH ERROR:",
             error.message ||
             String(error)
         );
 
-        return null;
+        return {
+
+            ok: false,
+
+            status: null,
+
+            text: null
+
+        };
 
     }
+
+}
+
+
+// ============================================================
+// TEST STREAM
+// ============================================================
+
+async function testStream(page, url, quality){
+
+    console.log("");
+    console.log(
+        `TEST ${quality || "UNKNOWN"}:`
+    );
+
+    console.log(url);
+
+
+    const result =
+        await fetchM3U8(
+            page,
+            url
+        );
+
+
+    if(!result.ok){
+
+        console.log(
+            `TEST ${quality || "UNKNOWN"}: FAILED`
+        );
+
+        return {
+
+            ok: false,
+
+            url,
+
+            quality,
+
+            status:
+                result.status
+
+        };
+
+    }
+
+
+    const text =
+        result.text;
+
+
+    // --------------------------------------------------------
+    // Make sure this is actually an HLS playlist.
+    // --------------------------------------------------------
+
+    const isPlaylist =
+        text.includes("#EXTINF") ||
+        text.includes("#EXT-X-TARGETDURATION") ||
+        text.includes("#EXT-X-MEDIA-SEQUENCE") ||
+        text.includes("#EXT-X-STREAM-INF");
+
+
+    if(!isPlaylist){
+
+        console.log(
+            `TEST ${quality || "UNKNOWN"}: INVALID M3U8`
+        );
+
+        return {
+
+            ok: false,
+
+            url,
+
+            quality,
+
+            status:
+                result.status
+
+        };
+
+    }
+
+
+    console.log(
+        `TEST ${quality || "UNKNOWN"}: OK`
+    );
+
+
+    return {
+
+        ok: true,
+
+        url,
+
+        quality,
+
+        status:
+            result.status
+
+    };
 
 }
 
@@ -397,7 +459,9 @@ function parseMasterPlaylist(text, baseUrl){
 
 
     if(
-        !text.includes("#EXT-X-STREAM-INF")
+        !text.includes(
+            "#EXT-X-STREAM-INF"
+        )
     ){
 
         return [];
@@ -464,11 +528,20 @@ function parseMasterPlaylist(text, baseUrl){
             }
 
 
-            url =
-                new URL(
-                    lines[j],
-                    baseUrl
-                ).href;
+            try{
+
+                url =
+                    new URL(
+                        lines[j],
+                        baseUrl
+                    ).href;
+
+            }catch(error){
+
+                url = null;
+
+            }
+
 
             break;
 
@@ -490,6 +563,19 @@ function parseMasterPlaylist(text, baseUrl){
             quality =
                 Number(
                     resolutionMatch[2]
+                );
+
+        }
+
+
+        // Some manifests may not expose
+        // resolution. Try URL as fallback.
+
+        if(!quality){
+
+            quality =
+                getQualityFromUrl(
+                    url
                 );
 
         }
@@ -521,126 +607,84 @@ function parseMasterPlaylist(text, baseUrl){
 
 
 // ============================================================
-// FIND BEST VARIANT
+// SORT VARIANTS
 // ============================================================
 
-function selectBestVariant(variants){
+function sortVariants(variants){
 
-    if(!variants.length){
+    return [...variants].sort(
+        (a,b) => {
 
-        return null;
-
-    }
-
-
-    // First: exact preferred qualities.
-
-    for(
-        const preferred
-        of PREFERRED_QUALITIES
-    ){
-
-        const found =
-            variants.find(
-                variant =>
-                    variant.quality ===
-                    preferred
-            );
+            const aq =
+                Number.isFinite(
+                    a.quality
+                )
+                ?
+                a.quality
+                :
+                0;
 
 
-        if(found){
+            const bq =
+                Number.isFinite(
+                    b.quality
+                )
+                ?
+                b.quality
+                :
+                0;
 
-            return found;
+
+            return bq - aq;
 
         }
-
-    }
-
-
-    // Otherwise choose highest known
-    // resolution.
-
-    const known =
-        variants
-            .filter(
-                variant =>
-                    Number.isFinite(
-                        variant.quality
-                    )
-            )
-            .sort(
-                (a,b) =>
-                    b.quality -
-                    a.quality
-            );
-
-
-    if(known.length){
-
-        return known[0];
-
-    }
-
-
-    // If resolution isn't exposed,
-    // use highest bandwidth.
-
-    const byBandwidth =
-        variants
-            .filter(
-                variant =>
-                    Number.isFinite(
-                        variant.bandwidth
-                    )
-            )
-            .sort(
-                (a,b) =>
-                    b.bandwidth -
-                    a.bandwidth
-            );
-
-
-    if(byBandwidth.length){
-
-        return byBandwidth[0];
-
-    }
-
-
-    return variants[0];
+    );
 
 }
 
 
 // ============================================================
-// RESOLVE M3U8
+// RESOLVE AND VERIFY M3U8
 // ============================================================
 
-async function resolveM3U8(page, url){
+async function resolveAndVerifyM3U8(
+    page,
+    url
+){
 
-    const text =
+    console.log("");
+    console.log(
+        "ANALYZING M3U8:"
+    );
+
+    console.log(url);
+
+
+    const fetched =
         await fetchM3U8(
             page,
             url
         );
 
 
-    if(!text){
+    if(!fetched.ok){
 
-        return {
+        console.log(
+            "MASTER FETCH FAILED"
+        );
 
-            type:"unavailable",
-
-            url:null,
-
-            quality:null
-
-        };
+        return null;
 
     }
 
 
-    // Master playlist.
+    const text =
+        fetched.text;
+
+
+    // ========================================================
+    // MASTER
+    // ========================================================
 
     if(
         text.includes(
@@ -674,25 +718,164 @@ async function resolveM3U8(page, url){
         );
 
 
-        const best =
-            selectBestVariant(
+        const ordered =
+            sortVariants(
                 variants
             );
 
 
-        if(best){
+        // ----------------------------------------------------
+        // Preferred qualities first.
+        // ----------------------------------------------------
+
+        const priority = [];
+
+
+        for(
+            const preferred
+            of PREFERRED_QUALITIES
+        ){
+
+            const matches =
+                ordered.filter(
+                    variant =>
+                        variant.quality ===
+                        preferred
+                );
+
+
+            priority.push(
+                ...matches
+            );
+
+        }
+
+
+        // ----------------------------------------------------
+        // Then any other qualities.
+        // ----------------------------------------------------
+
+        for(
+            const variant
+            of ordered
+        ){
+
+            if(
+                !priority.some(
+                    item =>
+                        item.url ===
+                        variant.url
+                )
+            ){
+
+                priority.push(
+                    variant
+                );
+
+            }
+
+        }
+
+
+        // ----------------------------------------------------
+        // TEST EVERY VARIANT.
+        // ----------------------------------------------------
+
+        for(
+            const variant
+            of priority
+        ){
+
+            const tested =
+                await testStream(
+                    page,
+                    variant.url,
+                    variant.quality
+                );
+
+
+            if(
+                tested.ok
+            ){
+
+                console.log("");
+                console.log(
+                    "VERIFIED MASTER VARIANT:"
+                );
+
+                console.log(
+                    JSON.stringify(
+                        tested,
+                        null,
+                        2
+                    )
+                );
+
+
+                return {
+
+                    url:
+                        tested.url,
+
+                    quality:
+                        tested.quality,
+
+                    type:
+                        "master-verified"
+
+                };
+
+            }
+
+        }
+
+
+        console.log(
+            "NO MASTER VARIANT PASSED TEST"
+        );
+
+
+        return null;
+
+    }
+
+
+    // ========================================================
+    // DIRECT H264
+    // ========================================================
+
+    if(
+        isH264M3U8(url)
+    ){
+
+        const quality =
+            getQualityFromUrl(
+                url
+            );
+
+
+        const tested =
+            await testStream(
+                page,
+                url,
+                quality
+            );
+
+
+        if(
+            tested.ok
+        ){
 
             return {
 
-                type:"master",
-
                 url:
-                    best.url,
+                    tested.url,
 
                 quality:
-                    best.quality,
+                    tested.quality,
 
-                variants
+                type:
+                    "direct-h264-verified"
 
             };
 
@@ -701,38 +884,7 @@ async function resolveM3U8(page, url){
     }
 
 
-    // Direct H264 playlist.
-
-    const quality =
-        getQualityFromUrl(
-            url
-        );
-
-
-    if(quality){
-
-        return {
-
-            type:"direct",
-
-            url,
-
-            quality
-
-        };
-
-    }
-
-
-    return {
-
-        type:"unknown",
-
-        url,
-
-        quality:null
-
-    };
+    return null;
 
 }
 
@@ -764,10 +916,8 @@ async function captureStation(page, station){
     console.log("");
 
 
-    const captured = new Map();
-
-
-    let playbackStartedAt = 0;
+    const captured =
+        new Map();
 
 
     const requestHandler =
@@ -812,18 +962,14 @@ async function captureStation(page, station){
             captured.set(
                 url,
                 {
+
                     url,
 
                     quality,
 
                     time:
-                        Date.now(),
+                        Date.now()
 
-                    afterPlayback:
-                        playbackStartedAt > 0
-                        &&
-                        Date.now() >=
-                        playbackStartedAt
                 }
             );
 
@@ -884,46 +1030,17 @@ async function captureStation(page, station){
                 "COULD NOT CLICK PLAY"
             );
 
-            return null;
-
         }
 
 
         // =====================================================
-        // WAIT
+        // WAIT FOR MORE REQUESTS
         // =====================================================
 
-        await sleep(3000);
+        await sleep(
+            3000
+        );
 
-
-        const playing =
-            await verifyPlayback(page);
-
-
-        if(playing){
-
-            playbackStartedAt =
-                Date.now();
-
-            console.log(
-                "PLAYBACK START TIME RECORDED"
-            );
-
-        }else{
-
-            console.log(
-                "PLAYBACK COULD NOT BE VERIFIED"
-            );
-
-            // We still keep monitoring because
-            // Dailymotion may delay media startup.
-
-        }
-
-
-        // =====================================================
-        // ALLOW QUALITY SELECTION
-        // =====================================================
 
         console.log("");
         console.log(
@@ -960,7 +1077,7 @@ async function captureStation(page, station){
 
 
         // =====================================================
-        // TRY TO RESOLVE MASTERS
+        // ANALYZE ALL M3U8
         // =====================================================
 
         const candidates = [];
@@ -970,15 +1087,6 @@ async function captureStation(page, station){
             const request
             of requests
         ){
-
-            if(
-                !request.afterPlayback
-            ){
-
-                continue;
-
-            }
-
 
             if(
                 !isM3U8(
@@ -991,18 +1099,8 @@ async function captureStation(page, station){
             }
 
 
-            console.log("");
-            console.log(
-                "ANALYZING M3U8:"
-            );
-
-            console.log(
-                request.url
-            );
-
-
             const resolved =
-                await resolveM3U8(
+                await resolveAndVerifyM3U8(
                     page,
                     request.url
                 );
@@ -1044,15 +1142,6 @@ async function captureStation(page, station){
         ){
 
             if(
-                !request.afterPlayback
-            ){
-
-                continue;
-
-            }
-
-
-            if(
                 !isH264M3U8(
                     request.url
                 )
@@ -1074,20 +1163,51 @@ async function captureStation(page, station){
             }
 
 
-            candidates.push({
+            const alreadyTested =
+                candidates.some(
+                    candidate =>
+                        candidate.url ===
+                        request.url
+                );
 
-                source:
+
+            if(
+                alreadyTested
+            ){
+
+                continue;
+
+            }
+
+
+            const tested =
+                await testStream(
+                    page,
                     request.url,
+                    quality
+                );
 
-                url:
-                    request.url,
 
-                quality,
+            if(
+                tested.ok
+            ){
 
-                type:
-                    "direct-h264"
+                candidates.push({
 
-            });
+                    source:
+                        request.url,
+
+                    url:
+                        request.url,
+
+                    quality,
+
+                    type:
+                        "direct-h264-verified"
+
+                });
+
+            }
 
         }
 
@@ -1105,16 +1225,14 @@ async function captureStation(page, station){
             of candidates
         ){
 
-            const key =
-                candidate.url;
-
-
             if(
-                !unique.has(key)
+                !unique.has(
+                    candidate.url
+                )
             ){
 
                 unique.set(
-                    key,
+                    candidate.url,
                     candidate
                 );
 
@@ -1204,17 +1322,11 @@ async function captureStation(page, station){
         }
 
 
-        // Fallback highest known quality.
-
         if(!selected){
 
             selected =
-                finalCandidates.find(
-                    candidate =>
-                        Number.isFinite(
-                            candidate.quality
-                        )
-                );
+                finalCandidates[0] ||
+                null;
 
         }
 
@@ -1250,7 +1362,7 @@ async function captureStation(page, station){
         );
 
         console.log(
-            "FINAL STREAM:"
+            "FINAL VERIFIED STREAM:"
         );
 
         console.log(
@@ -1310,7 +1422,7 @@ async function main(){
     );
 
     console.log(
-        "Mode: PLAY + M3U8 MASTER ANALYSIS"
+        "Mode: M3U8 + REAL STREAM VERIFICATION"
     );
 
     console.log(
@@ -1359,7 +1471,9 @@ async function main(){
         ).catch(()=>{});
 
 
-        await sleep(1000);
+        await sleep(
+            1000
+        );
 
     }
 
@@ -1453,7 +1567,10 @@ async function main(){
                             fresh.url,
 
                         quality:
-                            fresh.quality
+                            fresh.quality,
+
+                        verified:
+                            true
 
                     };
 
@@ -1491,9 +1608,14 @@ async function main(){
 
         if(!exists){
 
-            output.push(
-                fresh
-            );
+            output.push({
+
+                ...fresh,
+
+                verified:
+                    true
+
+            });
 
         }
 
