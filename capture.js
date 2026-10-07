@@ -9,47 +9,39 @@ const stations = [
         frequency: "88.7 FM",
         page: "https://www.maspero.eg/stream/8"
     },
-
     {
         name: "الشرق الأوسط",
         frequency: "89.5 FM",
-        page: ""
+        page: "https://www.maspero.eg/stream/16"
     },
-
     {
         name: "البرنامج الثقافي ودراما FM",
         frequency: "91.5 FM",
-        page: ""
+        page: "https://www.maspero.eg/stream/12"
     },
-
     {
         name: "إذاعة القاهرة الكبرى",
         frequency: "102.2 FM",
-        page: ""
+        page: "https://www.maspero.eg/stream/14"
     },
-
     {
         name: "الأغاني",
         frequency: "105.8 FM",
-        page: ""
+        page: "https://www.maspero.eg/stream/13"
     },
-
     {
-        name: "الإذاعة العامة",
-        frequency: "Maspero",
-        page: ""
+        name: "إذاعة البرنامج العام",
+        frequency: "107.4 FM",
+        page: "https://www.maspero.eg/stream/10"
     },
-
     {
         name: "الشباب والرياضة",
         frequency: "108 FM",
-        page: ""
+        page: "https://www.maspero.eg/stream/11"
     }
 ];
 
-
 function loadOldData() {
-
     if (!fs.existsSync(OUTPUT_FILE)) {
         return {
             updated: null,
@@ -65,7 +57,6 @@ function loadOldData() {
             )
         );
     } catch (error) {
-
         console.log(
             "Could not read existing JSON."
         );
@@ -77,9 +68,7 @@ function loadOldData() {
     }
 }
 
-
 function getOldStation(oldData, station) {
-
     if (!Array.isArray(oldData.stations)) {
         return null;
     }
@@ -90,9 +79,7 @@ function getOldStation(oldData, station) {
     ) || null;
 }
 
-
 function isH264Stream(url) {
-
     if (!url) {
         return false;
     }
@@ -112,9 +99,7 @@ function isH264Stream(url) {
     return /live-h264-[^/?]+\.m3u8/i.test(url);
 }
 
-
 function getQuality(url) {
-
     const match = url.match(
         /live-h264-(\d+)\.m3u8/i
     );
@@ -125,11 +110,6 @@ function getQuality(url) {
 
     const value = Number(match[1]);
 
-    /*
-     * للراديو نفضل جودة منخفضة مستقرة.
-     * 240 أولاً، ثم 360، ثم 480...
-     */
-
     if (value === 240) return 100;
     if (value === 360) return 90;
     if (value === 480) return 80;
@@ -139,11 +119,9 @@ function getQuality(url) {
     return 50;
 }
 
-
 async function captureStation(browser, station) {
 
     if (!station.page) {
-
         console.log(
             `SKIP: ${station.name} - page not configured`
         );
@@ -154,6 +132,10 @@ async function captureStation(browser, station) {
     console.log("");
     console.log(
         `Opening ${station.name}`
+    );
+
+    console.log(
+        `Page: ${station.page}`
     );
 
     const page = await browser.newPage();
@@ -168,6 +150,7 @@ async function captureStation(browser, station) {
 
             streams.add(url);
 
+            console.log("");
             console.log(
                 "H264 FOUND:"
             );
@@ -175,7 +158,6 @@ async function captureStation(browser, station) {
             console.log(url);
         }
     });
-
 
     try {
 
@@ -187,7 +169,9 @@ async function captureStation(browser, station) {
             }
         );
 
-        console.log("Page loaded.");
+        console.log(
+            "Page loaded."
+        );
 
         await page.waitForTimeout(20000);
 
@@ -197,19 +181,18 @@ async function captureStation(browser, station) {
             `ERROR: ${station.name}`
         );
 
-        console.log(error.message);
+        console.log(
+            error.message
+        );
 
         await page.close();
 
         return null;
     }
 
-
     await page.close();
 
-
     const results = [...streams];
-
 
     if (results.length === 0) {
 
@@ -220,21 +203,31 @@ async function captureStation(browser, station) {
         return null;
     }
 
-
     results.sort(
         (a, b) =>
             getQuality(b) -
             getQuality(a)
     );
 
+    const selectedStream = results[0];
 
-    return results[0];
+    console.log("");
+    console.log(
+        `SELECTED STREAM: ${station.name}`
+    );
+
+    console.log(
+        selectedStream
+    );
+
+    return selectedStream;
 }
-
 
 (async () => {
 
-    console.log("Starting Maspero Stream Finder...");
+    console.log(
+        "Starting Maspero Stream Finder..."
+    );
 
     const oldData = loadOldData();
 
@@ -246,7 +239,6 @@ async function captureStation(browser, station) {
 
     let changed = false;
 
-
     for (const station of stations) {
 
         const oldStation =
@@ -255,17 +247,15 @@ async function captureStation(browser, station) {
                 station
             );
 
-
         const newStream =
             await captureStation(
                 browser,
                 station
             );
 
-
         /*
-         * لو لم نجد رابط جديد:
-         * نحافظ على الرابط القديم.
+         * If capture failed:
+         * keep the old stream.
          */
 
         if (!newStream) {
@@ -293,9 +283,9 @@ async function captureStation(browser, station) {
             continue;
         }
 
-
         /*
-         * مقارنة الرابط الجديد بالقديم
+         * Compare the newly captured stream
+         * with the existing JSON stream.
          */
 
         if (
@@ -303,6 +293,7 @@ async function captureStation(browser, station) {
             oldStation.stream !== newStream
         ) {
 
+            console.log("");
             console.log(
                 `CHANGED: ${station.name}`
             );
@@ -311,11 +302,11 @@ async function captureStation(browser, station) {
 
         } else {
 
+            console.log("");
             console.log(
                 `UNCHANGED: ${station.name}`
             );
         }
-
 
         outputStations.push({
             name: station.name,
@@ -324,12 +315,11 @@ async function captureStation(browser, station) {
         });
     }
 
-
     await browser.close();
 
-
     /*
-     * لا نكتب JSON إذا لم يحدث أي تغيير.
+     * If nothing changed,
+     * do not rewrite the JSON.
      */
 
     if (!changed) {
@@ -346,14 +336,10 @@ async function captureStation(browser, station) {
         process.exit(0);
     }
 
-
     const output = {
-
         updated: new Date().toISOString(),
-
         stations: outputStations
     };
-
 
     fs.writeFileSync(
         OUTPUT_FILE,
@@ -364,7 +350,6 @@ async function captureStation(browser, station) {
         ) + "\n",
         "utf8"
     );
-
 
     console.log("");
     console.log(
