@@ -1,58 +1,382 @@
 const { chromium } = require("playwright");
+const fs = require("fs");
 
-(async () => {
-    const browser = await chromium.launch({
-        headless: true
-    });
+const OUTPUT_FILE = "maspero-streams.json";
+
+const stations = [
+    {
+        name: "راديو مصر",
+        frequency: "88.7 FM",
+        page: "https://www.maspero.eg/stream/8"
+    },
+
+    {
+        name: "الشرق الأوسط",
+        frequency: "89.5 FM",
+        page: ""
+    },
+
+    {
+        name: "البرنامج الثقافي ودراما FM",
+        frequency: "91.5 FM",
+        page: ""
+    },
+
+    {
+        name: "إذاعة القاهرة الكبرى",
+        frequency: "102.2 FM",
+        page: ""
+    },
+
+    {
+        name: "الأغاني",
+        frequency: "105.8 FM",
+        page: ""
+    },
+
+    {
+        name: "الإذاعة العامة",
+        frequency: "Maspero",
+        page: ""
+    },
+
+    {
+        name: "الشباب والرياضة",
+        frequency: "108 FM",
+        page: ""
+    }
+];
+
+
+function loadOldData() {
+
+    if (!fs.existsSync(OUTPUT_FILE)) {
+        return {
+            updated: null,
+            stations: []
+        };
+    }
+
+    try {
+        return JSON.parse(
+            fs.readFileSync(
+                OUTPUT_FILE,
+                "utf8"
+            )
+        );
+    } catch (error) {
+
+        console.log(
+            "Could not read existing JSON."
+        );
+
+        return {
+            updated: null,
+            stations: []
+        };
+    }
+}
+
+
+function getOldStation(oldData, station) {
+
+    if (!Array.isArray(oldData.stations)) {
+        return null;
+    }
+
+    return oldData.stations.find(item =>
+        item.name === station.name &&
+        item.frequency === station.frequency
+    ) || null;
+}
+
+
+function isH264Stream(url) {
+
+    if (!url) {
+        return false;
+    }
+
+    if (!/\.m3u8(?:[?#]|$)/i.test(url)) {
+        return false;
+    }
+
+    if (/\/cdn\/manifest\//i.test(url)) {
+        return false;
+    }
+
+    if (/dmxleo\.dailymotion\.com/i.test(url)) {
+        return false;
+    }
+
+    return /live-h264-[^/?]+\.m3u8/i.test(url);
+}
+
+
+function getQuality(url) {
+
+    const match = url.match(
+        /live-h264-(\d+)\.m3u8/i
+    );
+
+    if (!match) {
+        return 0;
+    }
+
+    const value = Number(match[1]);
+
+    /*
+     * للراديو نفضل جودة منخفضة مستقرة.
+     * 240 أولاً، ثم 360، ثم 480...
+     */
+
+    if (value === 240) return 100;
+    if (value === 360) return 90;
+    if (value === 480) return 80;
+    if (value === 720) return 70;
+    if (value === 1080) return 60;
+
+    return 50;
+}
+
+
+async function captureStation(browser, station) {
+
+    if (!station.page) {
+
+        console.log(
+            `SKIP: ${station.name} - page not configured`
+        );
+
+        return null;
+    }
+
+    console.log("");
+    console.log(
+        `Opening ${station.name}`
+    );
 
     const page = await browser.newPage();
 
     const streams = new Set();
 
     page.on("request", request => {
+
         const url = request.url();
 
-        if (
-            /\.m3u8(?:[?#]|$)/i.test(url) &&
-            /live-aac-64\.m3u8/i.test(url)
-        ) {
+        if (isH264Stream(url)) {
+
             streams.add(url);
+
+            console.log(
+                "H264 FOUND:"
+            );
+
+            console.log(url);
         }
     });
 
-    console.log("Opening Maspero...");
 
-    await page.goto(
-        "https://www.maspero.eg/stream/8",
-        {
-            waitUntil: "domcontentloaded",
-            timeout: 60000
-        }
-    );
+    try {
 
-    console.log("Page loaded.");
+        await page.goto(
+            station.page,
+            {
+                waitUntil: "domcontentloaded",
+                timeout: 60000
+            }
+        );
 
-    await page.waitForTimeout(20000);
+        console.log("Page loaded.");
+
+        await page.waitForTimeout(20000);
+
+    } catch (error) {
+
+        console.log(
+            `ERROR: ${station.name}`
+        );
+
+        console.log(error.message);
+
+        await page.close();
+
+        return null;
+    }
+
+
+    await page.close();
+
 
     const results = [...streams];
 
-    console.log(`AAC STREAMS FOUND: ${results.length}`);
 
     if (results.length === 0) {
-        console.log("NO AAC M3U8 FOUND");
-    } else {
 
-        // آخر رابط ملتقط
-        const stream = results[results.length - 1];
+        console.log(
+            `NO H264 FOUND: ${station.name}`
+        );
 
-        console.log("");
-        console.log("======================================");
-        console.log("FINAL M3U8 STREAM:");
-        console.log(stream);
-        console.log("======================================");
-        console.log("");
+        return null;
     }
 
+
+    results.sort(
+        (a, b) =>
+            getQuality(b) -
+            getQuality(a)
+    );
+
+
+    return results[0];
+}
+
+
+(async () => {
+
+    console.log("Starting Maspero Stream Finder...");
+
+    const oldData = loadOldData();
+
+    const browser = await chromium.launch({
+        headless: true
+    });
+
+    const outputStations = [];
+
+    let changed = false;
+
+
+    for (const station of stations) {
+
+        const oldStation =
+            getOldStation(
+                oldData,
+                station
+            );
+
+
+        const newStream =
+            await captureStation(
+                browser,
+                station
+            );
+
+
+        /*
+         * لو لم نجد رابط جديد:
+         * نحافظ على الرابط القديم.
+         */
+
+        if (!newStream) {
+
+            if (
+                oldStation &&
+                oldStation.stream
+            ) {
+
+                outputStations.push({
+                    name: station.name,
+                    frequency: station.frequency,
+                    stream: oldStation.stream
+                });
+
+            } else {
+
+                outputStations.push({
+                    name: station.name,
+                    frequency: station.frequency,
+                    stream: ""
+                });
+            }
+
+            continue;
+        }
+
+
+        /*
+         * مقارنة الرابط الجديد بالقديم
+         */
+
+        if (
+            !oldStation ||
+            oldStation.stream !== newStream
+        ) {
+
+            console.log(
+                `CHANGED: ${station.name}`
+            );
+
+            changed = true;
+
+        } else {
+
+            console.log(
+                `UNCHANGED: ${station.name}`
+            );
+        }
+
+
+        outputStations.push({
+            name: station.name,
+            frequency: station.frequency,
+            stream: newStream
+        });
+    }
+
+
     await browser.close();
+
+
+    /*
+     * لا نكتب JSON إذا لم يحدث أي تغيير.
+     */
+
+    if (!changed) {
+
+        console.log("");
+        console.log(
+            "NO CHANGES DETECTED."
+        );
+
+        console.log(
+            "JSON NOT MODIFIED."
+        );
+
+        process.exit(0);
+    }
+
+
+    const output = {
+
+        updated: new Date().toISOString(),
+
+        stations: outputStations
+    };
+
+
+    fs.writeFileSync(
+        OUTPUT_FILE,
+        JSON.stringify(
+            output,
+            null,
+            4
+        ) + "\n",
+        "utf8"
+    );
+
+
+    console.log("");
+    console.log(
+        "================================"
+    );
+
+    console.log(
+        "maspero-streams.json UPDATED"
+    );
+
+    console.log(
+        "================================"
+    );
 
 })();
