@@ -46,9 +46,9 @@ const stations = [
    LOAD OLD DATA
 ========================================================= */
 
-function loadOldData(){
+function loadOldData() {
 
-    if(!fs.existsSync(OUTPUT_FILE)){
+    if (!fs.existsSync(OUTPUT_FILE)) {
 
         return {
             updated: null,
@@ -57,7 +57,7 @@ function loadOldData(){
 
     }
 
-    try{
+    try {
 
         return JSON.parse(
             fs.readFileSync(
@@ -67,7 +67,7 @@ function loadOldData(){
         );
 
     }
-    catch(error){
+    catch (error) {
 
         console.log(
             "Could not read existing JSON."
@@ -90,20 +90,20 @@ function loadOldData(){
 function getOldStation(
     oldData,
     station
-){
+) {
 
-    if(
+    if (
         !Array.isArray(
             oldData.stations
         )
-    ){
+    ) {
 
         return null;
 
     }
 
     return oldData.stations.find(
-        function(item){
+        function (item) {
 
             return (
                 item.name === station.name &&
@@ -117,98 +117,79 @@ function getOldStation(
 
 
 /* =========================================================
-   CHECK AAC HLS
+   CHECK H264 STREAM
 ========================================================= */
 
-function isAacStream(url){
+function isH264Stream(url) {
 
-    if(!url){
+    if (!url) {
 
         return false;
 
     }
 
-    /*
-     * Must be an HLS playlist.
-     */
-
-    if(
+    if (
         !/\.m3u8(?:[?#]|$)/i.test(url)
-    ){
+    ) {
 
         return false;
 
     }
 
-    /*
-     * We specifically want AAC radio streams.
-     */
-
-    if(
-        !/live-aac-/i.test(url)
-    ){
-
-        return false;
-
-    }
-
-    /*
-     * Ignore generic Dailymotion manifests.
-     */
-
-    if(
+    if (
         /\/cdn\/manifest\//i.test(url)
-    ){
+    ) {
 
         return false;
 
     }
 
-    if(
+    if (
         /dmxleo\.dailymotion\.com/i.test(url)
-    ){
+    ) {
 
         return false;
 
     }
 
-    return true;
+    return /live-h264-(?:240|360|480)\.m3u8/i.test(url);
 
 }
 
 
 /* =========================================================
-   GET AAC QUALITY
+   GET H264 QUALITY
 ========================================================= */
 
-function getQuality(url){
+function getQuality(url) {
 
     const match =
         url.match(
-            /live-aac-(\d+)\.m3u8/i
+            /live-h264-(\d+)\.m3u8/i
         );
 
-    if(!match){
+    if (!match) {
 
         return 0;
 
     }
 
     const value =
-        Number(
-            match[1]
-        );
+        Number(match[1]);
+
 
     /*
-     * Prefer 128 if available.
-     * Then 64.
+     * Prefer 480.
      */
 
-    if(value === 128) return 100;
+    if (value === 480) return 100;
 
-    if(value === 64) return 90;
+    if (value === 360) return 90;
 
-    return 50;
+    if (value === 240) return 80;
+
+
+    return 0;
 
 }
 
@@ -220,9 +201,9 @@ function getQuality(url){
 async function captureStation(
     browser,
     station
-){
+) {
 
-    if(!station.page){
+    if (!station.page) {
 
         console.log(
             `SKIP: ${station.name} - page not configured`
@@ -257,21 +238,22 @@ async function captureStation(
 
     page.on(
         "request",
-        function(request){
+        function (request) {
 
             const url =
                 request.url();
 
 
-            if(
-                isAacStream(url)
-            ){
+            if (
+                isH264Stream(url)
+            ) {
 
                 streams.add(url);
 
+
                 console.log("");
                 console.log(
-                    "AAC FOUND:"
+                    "H264 FOUND:"
                 );
 
                 console.log(
@@ -284,7 +266,7 @@ async function captureStation(
     );
 
 
-    try{
+    try {
 
         await page.goto(
             station.page,
@@ -304,8 +286,8 @@ async function captureStation(
 
 
         /*
-         * Give the Maspero player enough
-         * time to start the stream.
+         * Give the player enough time
+         * to request the stream.
          */
 
         await page.waitForTimeout(
@@ -313,7 +295,7 @@ async function captureStation(
         );
 
     }
-    catch(error){
+    catch (error) {
 
         console.log(
             `ERROR: ${station.name}`
@@ -338,12 +320,12 @@ async function captureStation(
         [...streams];
 
 
-    if(
+    if (
         results.length === 0
-    ){
+    ) {
 
         console.log(
-            `NO AAC FOUND: ${station.name}`
+            `NO H264 FOUND: ${station.name}`
         );
 
         return null;
@@ -351,12 +333,14 @@ async function captureStation(
     }
 
 
-    /*
-     * Highest AAC quality first.
-     */
+    /* =====================================================
+       SORT BY QUALITY
+
+       480 → 360 → 240
+    ===================================================== */
 
     results.sort(
-        function(a,b){
+        function (a, b) {
 
             return (
                 getQuality(b) -
@@ -373,7 +357,7 @@ async function captureStation(
 
     console.log("");
     console.log(
-        `SELECTED AAC STREAM: ${station.name}`
+        `SELECTED H264 STREAM: ${station.name}`
     );
 
     console.log(
@@ -390,10 +374,10 @@ async function captureStation(
    MAIN
 ========================================================= */
 
-(async function(){
+(async function () {
 
     console.log(
-        "Starting Maspero AAC Stream Finder..."
+        "Starting Maspero H264 Stream Finder..."
     );
 
 
@@ -415,9 +399,9 @@ async function captureStation(
         false;
 
 
-    for(
+    for (
         const station of stations
-    ){
+    ) {
 
         const oldStation =
             getOldStation(
@@ -433,17 +417,18 @@ async function captureStation(
             );
 
 
-        /*
-         * If capture failed,
-         * keep the previous valid link.
-         */
+        /* =================================================
+           CAPTURE FAILED
 
-        if(!newStream){
+           Keep old valid stream.
+        ================================================= */
 
-            if(
+        if (!newStream) {
+
+            if (
                 oldStation &&
                 oldStation.stream
-            ){
+            ) {
 
                 outputStations.push({
 
@@ -459,7 +444,7 @@ async function captureStation(
                 });
 
             }
-            else{
+            else {
 
                 outputStations.push({
 
@@ -481,14 +466,14 @@ async function captureStation(
         }
 
 
-        /*
-         * Compare with old link.
-         */
+        /* =================================================
+           CHECK CHANGE
+        ================================================= */
 
-        if(
+        if (
             !oldStation ||
             oldStation.stream !== newStream
-        ){
+        ) {
 
             console.log("");
             console.log(
@@ -498,7 +483,7 @@ async function captureStation(
             changed = true;
 
         }
-        else{
+        else {
 
             console.log("");
             console.log(
@@ -531,7 +516,7 @@ async function captureStation(
        NO CHANGES
     ===================================================== */
 
-    if(!changed){
+    if (!changed) {
 
         console.log("");
         console.log(
