@@ -66,8 +66,7 @@ function loadOldData() {
             )
         );
 
-    }
-    catch (error) {
+    } catch (error) {
 
         console.log(
             "Could not read existing JSON."
@@ -87,69 +86,33 @@ function loadOldData() {
    FIND OLD STATION
 ========================================================= */
 
-function getOldStation(
-    oldData,
-    station
-) {
+function getOldStation(oldData, station) {
 
-    if (
-        !Array.isArray(
-            oldData.stations
-        )
-    ) {
-
+    if (!Array.isArray(oldData.stations)) {
         return null;
-
     }
 
     return oldData.stations.find(
-        function (item) {
-
-            return (
-                item.name === station.name &&
-                item.frequency === station.frequency
-            );
-
-        }
+        item =>
+            item.name === station.name &&
+            item.frequency === station.frequency
     ) || null;
 
 }
 
 
 /* =========================================================
-   CHECK H264 STREAM
+   H264 STREAM CHECK
 ========================================================= */
 
 function isH264Stream(url) {
 
     if (!url) {
-
         return false;
-
     }
 
-    if (
-        !/\.m3u8(?:[?#]|$)/i.test(url)
-    ) {
-
+    if (!/\.m3u8(?:[?#]|$)/i.test(url)) {
         return false;
-
-    }
-
-    if (
-        /\/cdn\/manifest\//i.test(url)
-    ) {
-
-        return false;
-
-    }
-
-    if (
-        /dmxleo\.dailymotion\.com/i.test(url)
-    ) {
-
-        return false;
-
     }
 
     return /live-h264-(?:240|360|480)\.m3u8/i.test(url);
@@ -158,7 +121,7 @@ function isH264Stream(url) {
 
 
 /* =========================================================
-   GET H264 QUALITY
+   GET QUALITY
 ========================================================= */
 
 function getQuality(url) {
@@ -169,58 +132,35 @@ function getQuality(url) {
         );
 
     if (!match) {
-
         return 0;
-
     }
 
-    const value =
-        Number(match[1]);
-
-
-    /*
-     * Prefer 480.
-     */
-
-    if (value === 480) return 100;
-
-    if (value === 360) return 90;
-
-    if (value === 240) return 80;
-
-
-    return 0;
+    return Number(match[1]);
 
 }
 
 
 /* =========================================================
-   CAPTURE STATION
+   CAPTURE + VERIFY PLAYBACK
 ========================================================= */
 
-async function captureStation(
-    browser,
-    station
-) {
-
-    if (!station.page) {
-
-        console.log(
-            `SKIP: ${station.name} - page not configured`
-        );
-
-        return null;
-
-    }
-
+async function captureStation(browser, station) {
 
     console.log("");
     console.log(
-        `Opening ${station.name}`
+        "========================================"
     );
 
     console.log(
-        `Page: ${station.page}`
+        `OPENING: ${station.name}`
+    );
+
+    console.log(
+        station.page
+    );
+
+    console.log(
+        "========================================"
     );
 
 
@@ -229,38 +169,46 @@ async function captureStation(
 
 
     const streams =
-        new Set();
+        new Map();
+
+
+    let playbackStarted =
+        false;
 
 
     /* =====================================================
-       CAPTURE NETWORK REQUESTS
+       CAPTURE H264 REQUESTS
     ===================================================== */
 
     page.on(
         "request",
-        function (request) {
+        request => {
 
             const url =
                 request.url();
 
 
-            if (
-                isH264Stream(url)
-            ) {
-
-                streams.add(url);
-
-
-                console.log("");
-                console.log(
-                    "H264 FOUND:"
-                );
-
-                console.log(
-                    url
-                );
-
+            if (!isH264Stream(url)) {
+                return;
             }
+
+
+            const quality =
+                getQuality(url);
+
+
+            streams.set(
+                quality,
+                url
+            );
+
+
+            console.log("");
+            console.log(
+                `H264 ${quality} FOUND`
+            );
+
+            console.log(url);
 
         }
     );
@@ -285,24 +233,308 @@ async function captureStation(
         );
 
 
-        /*
-         * Give the player enough time
-         * to request the stream.
-         */
+        /* =================================================
+           FIND VIDEO / AUDIO ELEMENTS
+        ================================================= */
 
-        await page.waitForTimeout(
-            20000
+        const mediaInfo =
+            await page.evaluate(
+                () => {
+
+                    const media =
+                        [
+                            ...document.querySelectorAll(
+                                "video, audio"
+                            )
+                        ];
+
+                    return media.map(
+                        element => ({
+
+                            tag:
+                                element.tagName,
+
+                            paused:
+                                element.paused,
+
+                            readyState:
+                                element.readyState,
+
+                            currentTime:
+                                element.currentTime,
+
+                            src:
+                                element.currentSrc ||
+                                element.src ||
+                                ""
+
+                        })
+                    );
+
+                }
+            );
+
+
+        console.log("");
+        console.log(
+            "MEDIA ELEMENTS:"
         );
 
-    }
-    catch (error) {
+        console.log(
+            JSON.stringify(
+                mediaInfo,
+                null,
+                2
+            )
+        );
 
+
+        /* =================================================
+           TRY TO PLAY MEDIA
+        ================================================= */
+
+        const playResult =
+            await page.evaluate(
+                async () => {
+
+                    const media =
+                        [
+                            ...document.querySelectorAll(
+                                "video, audio"
+                            )
+                        ];
+
+                    const results = [];
+
+                    for (
+                        const element of media
+                    ) {
+
+                        try {
+
+                            element.muted = true;
+
+                            const result =
+                                element.play();
+
+
+                            if (
+                                result &&
+                                typeof result.then === "function"
+                            ) {
+
+                                await result;
+
+                            }
+
+
+                            results.push({
+
+                                tag:
+                                    element.tagName,
+
+                                playing:
+                                    !element.paused,
+
+                                readyState:
+                                    element.readyState,
+
+                                currentTime:
+                                    element.currentTime
+
+                            });
+
+                        }
+                        catch (error) {
+
+                            results.push({
+
+                                tag:
+                                    element.tagName,
+
+                                playing:
+                                    false,
+
+                                error:
+                                    error.message
+
+                            });
+
+                        }
+
+                    }
+
+
+                    return results;
+
+                }
+            );
+
+
+        console.log("");
+        console.log(
+            "PLAY RESULT:"
+        );
+
+        console.log(
+            JSON.stringify(
+                playResult,
+                null,
+                2
+            )
+        );
+
+
+        /* =================================================
+           WAIT FOR ACTUAL PLAYBACK
+        ================================================= */
+
+        for (
+            let i = 0;
+            i < 15;
+            i++
+        ) {
+
+            await page.waitForTimeout(
+                2000
+            );
+
+
+            const state =
+                await page.evaluate(
+                    () => {
+
+                        const media =
+                            [
+                                ...document.querySelectorAll(
+                                    "video, audio"
+                                )
+                            ];
+
+
+                        return media.map(
+                            element => ({
+
+                                tag:
+                                    element.tagName,
+
+                                paused:
+                                    element.paused,
+
+                                readyState:
+                                    element.readyState,
+
+                                currentTime:
+                                    element.currentTime,
+
+                                src:
+                                    element.currentSrc ||
+                                    element.src ||
+                                    ""
+
+                            })
+                        );
+
+                    }
+                );
+
+
+            console.log("");
+            console.log(
+                `PLAYBACK CHECK ${i + 1}/15`
+            );
+
+            console.log(
+                JSON.stringify(
+                    state,
+                    null,
+                    2
+                )
+            );
+
+
+            /*
+             * Actual playback means:
+             *
+             * paused = false
+             * readyState >= 2
+             * currentTime > 0
+             */
+
+            const playingMedia =
+                state.find(
+                    media =>
+                        media.paused === false &&
+                        media.readyState >= 2 &&
+                        media.currentTime > 0
+                );
+
+
+            if (playingMedia) {
+
+                playbackStarted =
+                    true;
+
+
+                console.log("");
+                console.log(
+                    "========================================"
+                );
+
+                console.log(
+                    "PLAYBACK CONFIRMED"
+                );
+
+                console.log(
+                    `MEDIA: ${playingMedia.tag}`
+                );
+
+                console.log(
+                    `CURRENT TIME: ${playingMedia.currentTime}`
+                );
+
+                console.log(
+                    "========================================"
+                );
+
+                break;
+
+            }
+
+        }
+
+
+    } catch (error) {
+
+        console.log("");
         console.log(
             `ERROR: ${station.name}`
         );
 
         console.log(
             error.message
+        );
+
+        await page.close();
+
+        return null;
+
+    }
+
+
+    /* =====================================================
+       DO NOT ACCEPT ANY STREAM WITHOUT PLAYBACK
+    ===================================================== */
+
+    if (!playbackStarted) {
+
+        console.log("");
+        console.log(
+            "PLAYBACK NOT CONFIRMED"
+        );
+
+        console.log(
+            `REJECTED: ${station.name}`
         );
 
 
@@ -313,19 +545,86 @@ async function captureStation(
     }
 
 
+    /* =====================================================
+       PLAYBACK CONFIRMED
+       NOW SELECT QUALITY
+    ===================================================== */
+
+    console.log("");
+    console.log(
+        "AVAILABLE H264 QUALITIES:"
+    );
+
+    console.log(
+        [...streams.keys()]
+            .sort(
+                (a, b) =>
+                    b - a
+            )
+    );
+
+
+    let selectedStream =
+        null;
+
+
+    /*
+     * 480 FIRST
+     */
+
+    if (streams.has(480)) {
+
+        selectedStream =
+            streams.get(480);
+
+        console.log("");
+        console.log(
+            "SELECTED QUALITY: 480"
+        );
+
+    }
+
+    /*
+     * 360 SECOND
+     */
+
+    else if (streams.has(360)) {
+
+        selectedStream =
+            streams.get(360);
+
+        console.log("");
+        console.log(
+            "SELECTED QUALITY: 360"
+        );
+
+    }
+
+    /*
+     * 240 LAST
+     */
+
+    else if (streams.has(240)) {
+
+        selectedStream =
+            streams.get(240);
+
+        console.log("");
+        console.log(
+            "SELECTED QUALITY: 240"
+        );
+
+    }
+
+
     await page.close();
 
 
-    const results =
-        [...streams];
+    if (!selectedStream) {
 
-
-    if (
-        results.length === 0
-    ) {
-
+        console.log("");
         console.log(
-            `NO H264 FOUND: ${station.name}`
+            "PLAYBACK WORKED BUT NO H264 STREAM WAS CAPTURED."
         );
 
         return null;
@@ -333,31 +632,9 @@ async function captureStation(
     }
 
 
-    /* =====================================================
-       SORT BY QUALITY
-
-       480 → 360 → 240
-    ===================================================== */
-
-    results.sort(
-        function (a, b) {
-
-            return (
-                getQuality(b) -
-                getQuality(a)
-            );
-
-        }
-    );
-
-
-    const selectedStream =
-        results[0];
-
-
     console.log("");
     console.log(
-        `SELECTED H264 STREAM: ${station.name}`
+        "SELECTED STREAM:"
     );
 
     console.log(
@@ -374,10 +651,18 @@ async function captureStation(
    MAIN
 ========================================================= */
 
-(async function () {
+(async () => {
 
     console.log(
-        "Starting Maspero H264 Stream Finder..."
+        "Starting Maspero Stream Finder..."
+    );
+
+    console.log(
+        "Playback verification: ENABLED"
+    );
+
+    console.log(
+        "Preferred quality: H264 480"
     );
 
 
@@ -387,7 +672,9 @@ async function captureStation(
 
     const browser =
         await chromium.launch({
+
             headless: true
+
         });
 
 
@@ -419,16 +706,25 @@ async function captureStation(
 
         /* =================================================
            CAPTURE FAILED
-
-           Keep old valid stream.
         ================================================= */
 
         if (!newStream) {
+
+            console.log("");
+            console.log(
+                `CAPTURE FAILED: ${station.name}`
+            );
+
 
             if (
                 oldStation &&
                 oldStation.stream
             ) {
+
+                console.log(
+                    "Keeping previous stream."
+                );
+
 
                 outputStations.push({
 
@@ -460,6 +756,7 @@ async function captureStation(
                 });
 
             }
+
 
             continue;
 
@@ -564,7 +861,7 @@ async function captureStation(
 
     console.log("");
     console.log(
-        "================================"
+        "========================================"
     );
 
     console.log(
@@ -572,7 +869,7 @@ async function captureStation(
     );
 
     console.log(
-        "================================"
+        "========================================"
     );
 
 })();
