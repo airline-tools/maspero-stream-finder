@@ -1,16 +1,1 @@
-[
-  {
-    "name": "إذاعة البرنامج العام",
-    "frequency": "107.4 FM",
-    "source": "https://www.maspero.eg/stream/10",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(FyoxwyU4J_PLuikL9j2wocZj7mdNWOx0Ovx93g8Jp-Nm25Lw9zyLoposgnMj910QYXZF93Xr0kLNWU2q4ySG5haW6ZekArma84YNvtZzk4PWqpCGThPMniy1s72miGRVYsnUMXUhwlZ4PYojcXg71a8OYseq8Jcc7IUw-L6VGLdyg6s1fLDBmAg6sw77_-r7)/dm/4/x8n6dt3/live-aac-64.m3u8",
-    "quality": "AAC-64"
-  },
-  {
-    "name": "الأغاني",
-    "frequency": "105.8 FM",
-    "source": "https://www.maspero.eg/stream/13",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(rDq-jJwVHSvZrEDHj5S1tQGg0FFCG3fqMchLvxBd8zqqToL5N0YxId1h3iEeHlk0SXr1jtiDNsV8JBkaIE0jvPZP4OKUU28EqVzOwxViv1ji1WeD1CdfLDLPAIvkkShCBbrUun2Osm9eQdaX08JeU25kUw8DaNoQmwtc2uj8LnWbnN72np3bXyohGsjLXgHy)/dm/4/x8n6dyz/live-aac-64.m3u8",
-    "quality": "AAC-64"
-  }
-]
+[]
