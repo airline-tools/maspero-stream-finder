@@ -94,39 +94,33 @@ async function main() {
         console.log("==============================");
 
 
-        let aac128 = null;
-        let aac64 = null;
+let aac128 = null;
+let aac64 = null;
 
+const mediaCandidates = new Set();
 
-        const handler = request => {
+const handler = request => {
 
-            const url = request.url();
+    const url = request.url();
 
+    if (
+        /\.(m3u8|mp3|aac|m4a|mpd)(?:$|[?#])/i.test(url) ||
+        /icecast|stream|audio|radio|live/i.test(url)
+    ) {
 
-            if (/live-aac-128\.m3u8/i.test(url)) {
+        mediaCandidates.add(url);
 
-                aac128 = url;
+        console.log("MEDIA REQUEST:", url);
 
-                console.log("");
-                console.log("AAC-128 FOUND:");
-                console.log(url);
+        if (/live-aac-128\.m3u8/i.test(url)) {
+            aac128 = url;
+        } else if (/live-aac-64\.m3u8/i.test(url)) {
+            aac64 = url;
+        }
+    }
+};
 
-            }
-
-            else if (/live-aac-64\.m3u8/i.test(url)) {
-
-                aac64 = url;
-
-                console.log("");
-                console.log("AAC-64 FOUND:");
-                console.log(url);
-
-            }
-
-        };
-
-
-        page.on("request", handler);
+page.on("request", handler);
 
 
         try {
