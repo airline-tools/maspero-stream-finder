@@ -77,6 +77,42 @@ async function main() {
 
         const page = await browser.newPage();
 
+        // Block unnecessary resources and advertising/tracking requests.
+await page.route("**/*", async route => {
+
+    const request = route.request();
+    const url = request.url();
+    const type = request.resourceType();
+
+    let hostname = "";
+
+    try {
+        hostname = new URL(url).hostname;
+    } catch {}
+
+    const blockedHosts =
+        /(^|\.)googleads\.g\.doubleclick\.net$/i.test(hostname) ||
+        /(^|\.)googlesyndication\.com$/i.test(hostname) ||
+        /(^|\.)2mdn\.net$/i.test(hostname) ||
+        /(^|\.)google-analytics\.com$/i.test(hostname) ||
+        /(^|\.)analytics\.google\.com$/i.test(hostname) ||
+        /(^|\.)fundingchoicesmessages\.google\.com$/i.test(hostname);
+
+    const trackingRequest =
+        /\/measurement\/conversion|\/g\/collect/i.test(url);
+
+    if (
+        type === "image" ||
+        type === "font" ||
+        blockedHosts ||
+        trackingRequest
+    ) {
+        return route.abort();
+    }
+
+    return route.continue();
+});
+
         const results = [];
 
         for (const station of STATIONS) {
@@ -91,24 +127,25 @@ async function main() {
             let aac128 = null;
             let aac64 = null;
 
-            const handler = request => {
+const handler = request => {
 
-                const url = request.url();
+    const url = request.url();
 
-                if (
-                    /\.(m3u8|mp3|aac|m4a|mpd)(?:$|[?#])/i.test(url) ||
-                    /icecast|stream|audio|radio|live/i.test(url)
-                ) {
+    if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) {
 
-                    console.log("MEDIA REQUEST:", url);
+        aac128 = url;
 
-                    if (/live-aac-128\.m3u8/i.test(url)) {
-                        aac128 = url;
-                    } else if (/live-aac-64\.m3u8/i.test(url)) {
-                        aac64 = url;
-                    }
-                }
-            };
+        console.log("AAC-128 FOUND:", url);
+
+    } else if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) {
+
+        aac64 = url;
+
+        console.log("AAC-64 FOUND:", url);
+
+    }
+
+};
 
             page.on("request", handler);
 
