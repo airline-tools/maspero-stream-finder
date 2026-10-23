@@ -10,56 +10,56 @@
     "name": "صوت العرب",
     "frequency": "612 AM",
     "source": "https://www.maspero.eg/stream/9",
-    "url": "https://live.eu-north-1a.cf.dmcdn.net/sec2(WliJobitJoH4hNgoFRGYA2FFcbePZZYiOZ7E4CKpzpG9BaPSObZXUQgTOsD_4MC8mDG44L5FMQgghwoTNNvrEVbeLjRvNKVbIHcfcR48tWnhVdafdDo4mquc9F4sxjVf4aje9EGbMDzJcMiKJ4qIKTBxUt2-SAqGE1KiYDMsNun31vj86pStBDjqgWIfsRNM)/dm/4/x8n6dqq/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1a.cf.dmcdn.net/sec2(vjavytwwbL4JNvMZBe6o0kqIM_N0IV1ZmRMC60P1al6O8n1bpQwxMdHkzMkpW6hqFQc8VVLhcIRoyy_AGc7kKS-oBwK4edNSdD2-K1Dd3oIfcTsrshunKLZ8ttpmp7Ej_qBODCFe0ahW7v1AqhnMMyWw2aNXllsoO0_LjZBwkcUFV0_CEZPEb5Rfldgd0K2H)/dm/4/x8n6dqq/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "إذاعة البرنامج العام",
     "frequency": "107.4 FM",
     "source": "https://www.maspero.eg/stream/10",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(gTg_E4qFrWhCfIbWi26WqOgdGLulQdUkXlsRHdDaEfk4Fba2zBqL7xdB9fKQfvs469AFknt95DmCMXpi-RBe9KNmR0cu9skDxv7z91MfGEKFLdLu4UsQKbDFXG6SwQ6jc6WCL1QioKYs6dhWNae98Bl5hB0aiD4r-0Qd-KPKgJ6eBeCRPhWhR94PMHzBZ34H)/dm/3/x8n6dt3/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(Qq7fCGvCJjWDTIvpFWYjet2EX-kRBf_iVUksPXBmUv8gi4If8VW_ymCS39z6yjOt9L-Iip_conrQB0VAbskxr8BJ6388gNNJ0H5vhZA8BxBa5X8bBupYPV-ZrD-1blSmf2-dqdb44UvLL4DQvjt0S-sIMPVaD1C6lIkCqjGcqBJJ3NMogdL-wwkB0MVBHn6-)/dm/3/x8n6dt3/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "الشباب والرياضة",
     "frequency": "108 FM",
     "source": "https://www.maspero.eg/stream/11",
-    "url": "https://live.eu-north-1a.cf.dmcdn.net/sec2(JkqCV1KjarzXvC0T6gp6awsb-EIBDilqD38kQjYTS9X6gFYedbbiMLJYljSVgAlCbSGVfsX02_ghnIPcEI1Rt32der9opaPyKOlfb0Dd6SW9XQS100JqbYtZdbfv4QHB3kl38LxAzPkYBA82x5S21oidoWmmraiHSmPyXuwSkv7fEMvl4RIjgrBYGytiuNPw)/dm/4/x8n6dzo/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1a.cf.dmcdn.net/sec2(YfMfazDusxmsXfXs8zXEQJ69vR3MJMoVLomU6YDMFWEYfn2nlTnhnGMXpWdD_F_gFQsjQzvbM65EzvA2mbGm1tIKcfEfk_F-z6K4fKVuXw_g1XhKDUJeiSwqwVOpzBt1TRltk9hLtCvhId7dmqY5NP6TPkvjtYBmzi0gnm-BYkZEURnr_kKgU7b_yGgyNgYu)/dm/4/x8n6dzo/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "البرنامج الثقافي ودراما FM",
     "frequency": "91.5 FM",
     "source": "https://www.maspero.eg/stream/12",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(c4tNurKE4L1zZAqVzEchR7iaNDuermZtcjn8sFsogGw9L2jHIEh4melfCVlGkRSuNi3W07NCI8Q4kn3EVJo8Pgk8FTOn4ErlWjh5SikfZqR5fGBUv5p_4EU8PAmgyWkDK_d3jMG0oUJDcpI4R4d5Yo3HEwE1r78JvZuby7U3j36_q-4ZjX-ljUU3O4rIHzo8)/dm/3/x8n6eci/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(8ZoHPKQvtb1Q6Z2Q11Y7gZb3BglYm7hlkdfl0S1YvExnnN_bDGIFF4K_Gg2L33tiECDGpkz-DvO_LsnciwIhMwFkGhab0G5Df-fiHztvAhifG2jp30NV3U5cDjE7bKdXACX8rXb-oemBz1kKD3PuQVvnNMP-p9ljNUXdCZit8dnde5pYJ-Bj-3QWOMX85khg)/dm/3/x8n6eci/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "الأغاني",
     "frequency": "105.8 FM",
     "source": "https://www.maspero.eg/stream/13",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(xv40GQkAbgj3cs5SaOrG0zcrfNNZOjKnvyQQxHxIaTDHwMAvPhjvTuvws9NWvul-JPMIQ3OJhEG9uj_6kphTVmb58q9-AjpOkWaNeUT1uZenaB2exR0mWTbhJuEvceOwrFPeelTAaWmSoJa8Oo4q4G5Ovrg0lCKh8RTj4ZMtGHRXRhpEYKI3UkAy5Z58NPjk)/dm/3/x8n6dyz/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(sjdgySTaz1abgLPrCjJy4_B0bl3rSN13l7VKWWA0p1DwVhbu93g2xzJplW3vxL9Cp8IT0PbcmbhTrgDD62LLXXW96YJ6E1VlFw8oGwWsbF0egZnIix8yexOp5eheuAbkOyLv2unYPTj6ty3HnInOHQfIyfIgL1LkgjRf4wOjirIU2_u-dYjzpLSOaRMNuDyZ)/dm/3/x8n6dyz/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "إذاعة القاهرة الكبرى",
     "frequency": "102.2 FM",
     "source": "https://www.maspero.eg/stream/14",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(UUd51TLXOaKqA3gpzBpN22tJiYL0N0F2nehGPA7kT9uAMm3LUEhE57vdLeHbuDV55nSIErrPi0okY4XQ_ykyXCRA_QQnFw7EDl56dO0cSZXKmLIDX669TIm7GbRnAP5mGNHvgVp0iZfoQ0-CiABfqKs5R7ZRPbk2ri7yJbWg5r2GrrA-k_fKz3tzL5VXZ-ps)/dm/3/x8n6ebs/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(FRD3bo2I73LCjIBhsNWhB9smhSTImbwP3VCi6ayuy46hmC1aC_uPhtM_kq_k8sXPjHHIYC4HwQVd-1dIGudDaJJNNiK1qDEQQW_YZNs_w7XZ8WDgxeYPZBiLS0Er-JiCX6QH84fslFYPrDcAYGfCzk31_7BGE1B2KM4sdgZ3b8vJDYuJKnl3gmP_0Ib3UyCo)/dm/3/x8n6ebs/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "الشرق الأوسط",
     "frequency": "89.5 FM",
     "source": "https://www.maspero.eg/stream/16",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(pM7BLqygflxsJsjCpJU6KByyKF7uu2yw7n0IbRSidk4Bges1ngxNZsakm7XBLQ0stsW3TfOn_7a2Dv78CPUInH9zUnzWhKKXweuxX56NGpE5ajVlu9cooOiDGmCDwunE3exRo94rV2euMxE3FWWZKmVkHD9PMqASIrwo1QZbJq1KgF9HgBec_982466-Z5HW)/dm/3/x8n6drt/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(LSeoKNUpUX82zY3vApSfmNWknT4ce7ldIfHsOZRMCqkRLH2DorhPFxgA0X9QCpvMsIIP4_qCpzQcYj9AMJcYCoZIRu8M45oEQKkLfoFHVxbAJgMjOSTqFMobxEmVjUhAEQ_x4mti9mOMmv1Bdad5yOE3aDCgH4AwX8v6C4Nczzjh7gfrfgdpu8ELvHGjbHZ3)/dm/3/x8n6drt/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   },
   {
     "name": "البرنامج الأوروبي",
     "frequency": "95.4 FM",
     "source": "https://www.maspero.eg/stream/18",
-    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(MTvWBpH6pk5rUKfvBhhmWATo2C0lKqFSbg2aFFr_dwgfv9Y-L0kB4u20oQH_3I58y47gt2puleIz422H0X2uYqymIG0kLawlbKcW_WOTCw69T9FTnEtsJRcMYkTgh0joaWXEAWmmnm1JwSF_63Y164_U-W-gEo4Rvzzmm2SHBhqV557tYpGxq41PD5lqsb2H)/dm/3/x8n6e6w/s/live-aac-64.m3u8",
+    "url": "https://live.eu-north-1b.cf.dmcdn.net/sec2(xkuTFg1YhGa-m0kVLSNxccr_YNAvPKLfPZuZV6_Z7Vvw8p9avkFabGRtWbwz9LjeyVx0Vv5zKlIzMSNwx_xgc8sR0sqczFEmQGQoy9kUTwlz6qNnPDenxYW7D_0k73RxIMZBcQbwSdZFDWDL2kS5btw9w2wSHDsraIkaXu1Bhku7pRs37stawOe5FPCDjyvw)/dm/3/x8n6e6w/s/live-aac-64.m3u8",
     "quality": "AAC-64"
   }
 ]
