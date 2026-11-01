@@ -127,25 +127,30 @@ await page.route("**/*", async route => {
             let aac128 = null;
             let aac64 = null;
 
-const handler = request => {
+            let captureStarted = false;
 
-    const url = request.url();
+            const handler = request => {
 
-    if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) {
+                // Ignore all requests during the advertisement.
+                if (!captureStarted) return;
 
-        aac128 = url;
+                const url = request.url();
 
-        console.log("AAC-128 FOUND:", url);
+                if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) {
 
-    } else if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) {
+                    aac128 = url;
 
-        aac64 = url;
+                    console.log("AAC-128 FOUND AFTER AD:", url);
 
-        console.log("AAC-64 FOUND:", url);
+                } else if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) {
 
-    }
+                    aac64 = url;
 
-};
+                    console.log("AAC-64 FOUND AFTER AD:", url);
+
+                }
+
+            };
 
             page.on("request", handler);
 
@@ -156,7 +161,18 @@ const handler = request => {
                     timeout: 60000
                 });
 
-                await sleep(15000);
+                console.log("WAITING 12 SECONDS FOR AD TO FINISH...");
+
+                await sleep(12000);
+
+                // Start capturing station stream links after the ad.
+                captureStarted = true;
+
+                console.log("ADVERTISEMENT PERIOD FINISHED");
+                console.log("SEARCHING FOR AAC-128 FIRST, THEN AAC-64...");
+
+                // Give the actual station stream time to load.
+                await sleep(8000);
 
             } catch (error) {
 
