@@ -1,122 +1,86 @@
+
 const { chromium } = require("playwright");
 const fs = require("fs");
 
 const OUTPUT_FILE = "maspero-streams.json";
 
-const STATIONS = [
+const AD_WAIT_MS = 12000;
+const CAPTURE_WAIT_MS = 12000;
 
+const STATIONS = [
     {
         name: "راديو مصر",
         frequency: "88.7 FM",
         url: "https://www.maspero.eg/stream/8"
     },
-
     {
         name: "صوت العرب",
         frequency: "612 AM",
         url: "https://www.maspero.eg/stream/9"
     },
-
     {
         name: "إذاعة البرنامج العام",
         frequency: "107.4 FM",
         url: "https://www.maspero.eg/stream/10"
     },
-
     {
         name: "الشباب والرياضة",
         frequency: "108 FM",
         url: "https://www.maspero.eg/stream/11"
     },
-
     {
         name: "البرنامج الثقافي ودراما FM",
         frequency: "91.5 FM",
         url: "https://www.maspero.eg/stream/12"
     },
-
     {
         name: "الأغاني",
         frequency: "105.8 FM",
         url: "https://www.maspero.eg/stream/13"
     },
-
     {
         name: "إذاعة القاهرة الكبرى",
         frequency: "102.2 FM",
         url: "https://www.maspero.eg/stream/14"
     },
-
     {
         name: "الشرق الأوسط",
         frequency: "89.5 FM",
         url: "https://www.maspero.eg/stream/16"
     },
-
     {
         name: "البرنامج الأوروبي",
         frequency: "95.4 FM",
         url: "https://www.maspero.eg/stream/18"
     }
-
 ];
-
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function getAACQuality(url) {
+    if (/aac-128\.m3u8(?:$|[?#])/i.test(url)) {
+        return "AAC-128";
+    }
+
+    if (/aac-64\.m3u8(?:$|[?#])/i.test(url)) {
+        return "AAC-64";
+    }
+
+    return null;
+}
 
 async function main() {
-
     const browser = await chromium.launch({
         headless: true
     });
 
     try {
-
-        const page = await browser.newPage();
-
-        // Block unnecessary resources and advertising/tracking requests.
-await page.route("**/*", async route => {
-
-    const request = route.request();
-    const url = request.url();
-    const type = request.resourceType();
-
-    let hostname = "";
-
-    try {
-        hostname = new URL(url).hostname;
-    } catch {}
-
-    const blockedHosts =
-        /(^|\.)googleads\.g\.doubleclick\.net$/i.test(hostname) ||
-        /(^|\.)googlesyndication\.com$/i.test(hostname) ||
-        /(^|\.)2mdn\.net$/i.test(hostname) ||
-        /(^|\.)google-analytics\.com$/i.test(hostname) ||
-        /(^|\.)analytics\.google\.com$/i.test(hostname) ||
-        /(^|\.)fundingchoicesmessages\.google\.com$/i.test(hostname);
-
-    const trackingRequest =
-        /\/measurement\/conversion|\/g\/collect/i.test(url);
-
-    if (
-        type === "image" ||
-        type === "font" ||
-        blockedHosts ||
-        trackingRequest
-    ) {
-        return route.abort();
-    }
-
-    return route.continue();
-});
-
+        const context = await browser.newContext();
         const results = [];
 
         for (const station of STATIONS) {
-
             console.log("");
             console.log("==============================");
             console.log("SEARCHING:", station.name);
@@ -124,70 +88,85 @@ await page.route("**/*", async route => {
             console.log("SOURCE:", station.url);
             console.log("==============================");
 
+            let captureStarted = false;
+
             let aac128 = null;
             let aac64 = null;
 
-            let captureStarted = false;
+            // Prevent duplicate logging of the same URL.
+            const seenUrls = new Set();
 
-            const handler = request => {
+            const page = await context.newPage();
 
-                // Ignore all requests during the advertisement.
-                if (!captureStarted) return;
+            // Use Chromium DevTools Protocol Network events.
+            const cdp = await context.newCDPSession(page);
 
-                const url = request.url();
+            await cdp.send("Network.enable");
 
-                if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) {
+            const inspectUrl = (url, eventType) => {
+                if (!captureStarted || !url) return;
 
+                const quality = getAACQuality(url);
+                if (!quality) return;
+
+                if (seenUrls.has(url)) return;
+                seenUrls.add(url);
+
+                console.log(`${quality} ${eventType}:`, url);
+
+                if (quality === "AAC-128") {
                     aac128 = url;
-
-                    console.log("AAC-128 FOUND AFTER AD:", url);
-
-                } else if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) {
-
+                } else if (quality === "AAC-64") {
                     aac64 = url;
-
-                    console.log("AAC-64 FOUND AFTER AD:", url);
-
                 }
-
             };
 
-            page.on("request", handler);
+            const onRequest = event => {
+                inspectUrl(event.request.url, "REQUEST");
+            };
+
+            const onResponse = event => {
+                inspectUrl(event.response.url, "RESPONSE");
+            };
+
+            cdp.on("Network.requestWillBeSent", onRequest);
+            cdp.on("Network.responseReceived", onResponse);
 
             try {
-
                 await page.goto(station.url, {
                     waitUntil: "domcontentloaded",
                     timeout: 60000
                 });
 
-                console.log("WAITING 12 SECONDS FOR AD TO FINISH...");
+                console.log("WAITING 12 SECONDS FOR ADVERTISEMENT...");
 
-                await sleep(12000);
+                await sleep(AD_WAIT_MS);
 
-                // Start capturing station stream links after the ad.
+                // Ignore every AAC link detected before this point.
                 captureStarted = true;
 
-                console.log("ADVERTISEMENT PERIOD FINISHED");
-                console.log("SEARCHING FOR AAC-128 FIRST, THEN AAC-64...");
+                console.log("AD PERIOD FINISHED");
+                console.log("CDP NETWORK CAPTURE STARTED");
+                console.log("PRIORITY: AAC-128, THEN AAC-64");
 
-                // Give the actual station stream time to load.
-                await sleep(8000);
+                await sleep(CAPTURE_WAIT_MS);
 
             } catch (error) {
-
                 console.log("PAGE ERROR:", error.message);
 
             } finally {
+                captureStarted = false;
 
-                page.off("request", handler);
+                cdp.off("Network.requestWillBeSent", onRequest);
+                cdp.off("Network.responseReceived", onResponse);
 
+                await cdp.detach().catch(() => {});
+                await page.close().catch(() => {});
             }
 
             const selectedUrl = aac128 || aac64;
 
             if (selectedUrl) {
-
                 const quality = aac128 ? "AAC-128" : "AAC-64";
 
                 console.log("");
@@ -203,25 +182,17 @@ await page.route("**/*", async route => {
                 });
 
             } else {
-
                 console.log("");
-                console.log("NO AAC-128 OR AAC-64 FOUND");
+                console.log("NO AAC-128 OR AAC-64 FOUND AFTER AD");
                 console.log("OLD LINK WILL BE PRESERVED IF AVAILABLE");
-
             }
-
-            await page.goto("about:blank").catch(() => {});
-
         }
 
-
-        // Read the existing JSON without deleting its old data.
+        // Read existing JSON without deleting old data.
         let previousResults = [];
 
         if (fs.existsSync(OUTPUT_FILE)) {
-
             try {
-
                 const oldData = JSON.parse(
                     fs.readFileSync(OUTPUT_FILE, "utf8")
                 );
@@ -233,7 +204,6 @@ await page.route("**/*", async route => {
                 previousResults = oldData;
 
             } catch (error) {
-
                 console.error(
                     "ERROR READING EXISTING JSON:",
                     error.message
@@ -245,13 +215,10 @@ await page.route("**/*", async route => {
 
                 process.exitCode = 1;
                 return;
-
             }
-
         }
 
-
-        // Index the old and newly discovered station links by source page.
+        // Index old and newly discovered links by source page.
         const previousBySource = new Map(
             previousResults.map(station => [station.source, station])
         );
@@ -265,18 +232,14 @@ await page.route("**/*", async route => {
         let unchanged = 0;
         let added = 0;
 
-
-        // Merge results station by station.
+        // Merge station results.
         const mergedResults = STATIONS.map(station => {
-
             const oldStation = previousBySource.get(station.url);
             const newStation = newBySource.get(station.url);
 
-            // Search did not find a link: keep the old station unchanged.
+            // No new link: preserve old record.
             if (!newStation) {
-
                 if (oldStation) {
-
                     preserved++;
 
                     console.log(
@@ -286,7 +249,6 @@ await page.route("**/*", async route => {
                     );
 
                     return oldStation;
-
                 }
 
                 console.log(
@@ -295,83 +257,57 @@ await page.route("**/*", async route => {
                 );
 
                 return null;
-
             }
 
-
-            // A link was found and this station already exists.
+            // Existing station.
             if (oldStation) {
-
-                // Same stream URL: do not replace the existing record.
                 if (oldStation.url === newStation.url) {
-
                     unchanged++;
 
-                    console.log(
-                        "UNCHANGED:",
-                        station.name
-                    );
+                    console.log("UNCHANGED:", station.name);
 
                     return oldStation;
-
                 }
 
-                // Different stream URL: update to the newly discovered URL.
                 updated++;
 
-                console.log(
-                    "UPDATED LINK:",
-                    station.name
-                );
-
+                console.log("UPDATED LINK:", station.name);
                 console.log("OLD:", oldStation.url);
                 console.log("NEW:", newStation.url);
 
                 return newStation;
-
             }
 
-
-            // First discovery of a station not already in the JSON.
+            // Newly discovered station.
             added++;
 
-            console.log(
-                "NEW STATION LINK:",
-                station.name
-            );
+            console.log("NEW STATION LINK:", station.name);
 
             return newStation;
 
         }).filter(Boolean);
 
-
-        // Preserve any existing entries not included in STATIONS.
+        // Preserve entries not included in STATIONS.
         const knownSources = new Set(
             STATIONS.map(station => station.url)
         );
 
         for (const oldStation of previousResults) {
-
             if (!knownSources.has(oldStation.source)) {
-
                 mergedResults.push(oldStation);
 
                 console.log(
                     "PRESERVED UNLISTED STATION:",
                     oldStation.name
                 );
-
             }
-
         }
 
-
-        // Write only when the actual saved data has changed.
+        // Write only if saved data has changed.
         const oldJson = JSON.stringify(previousResults, null, 2);
         const newJson = JSON.stringify(mergedResults, null, 2);
 
         if (oldJson !== newJson) {
-
             fs.writeFileSync(
                 OUTPUT_FILE,
                 newJson,
@@ -382,12 +318,9 @@ await page.route("**/*", async route => {
             console.log("JSON UPDATED");
 
         } else {
-
             console.log("");
             console.log("NO CHANGES - OLD JSON PRESERVED");
-
         }
-
 
         console.log("");
         console.log("==============================");
@@ -400,18 +333,11 @@ await page.route("**/*", async route => {
         console.log("==============================");
 
     } finally {
-
         await browser.close();
-
     }
-
 }
 
-
 main().catch(error => {
-
     console.error("ERROR:", error);
-
     process.exitCode = 1;
-
 });
