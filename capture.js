@@ -26,7 +26,39 @@ function getQuality(url) {
     return null;
 }
 
+const https = require("https");
+
+function testMasperoAccess(url) {
+    return new Promise(resolve => {
+        const req = https.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "text/html,application/xhtml+xml"
+            },
+            timeout: 20000
+        }, res => {
+            console.log("DIRECT HTTP STATUS:", res.statusCode);
+            res.resume();
+            resolve();
+        });
+
+        req.on("error", error => {
+            console.log("DIRECT HTTP ERROR:", error.message);
+            resolve();
+        });
+
+        req.on("timeout", () => {
+            console.log("DIRECT HTTP TIMEOUT");
+            req.destroy();
+            resolve();
+        });
+    });
+}
+
 async function main() {
+    await testMasperoAccess(
+    "https://www.maspero.eg/stream/8"
+);
     const browser = await chromium.launch({
         headless: true,
         args: ["--autoplay-policy=no-user-gesture-required"]
