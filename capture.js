@@ -27,7 +27,10 @@ function getQuality(url) {
 }
 
 async function main() {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+        headless: true,
+        args: ["--autoplay-policy=no-user-gesture-required"]
+    });
 
     try {
         const context = await browser.newContext();
@@ -40,7 +43,6 @@ async function main() {
             console.log("==============================");
 
             const page = await context.newPage();
-            const cdp = await context.newCDPSession(page);
 
             let aac128 = null;
             let aac64 = null;
@@ -50,41 +52,46 @@ async function main() {
 
             const inspect = (url, source) => {
                 const quality = getQuality(url);
+
                 if (!quality || seen.has(url)) return;
 
                 seen.add(url);
 
                 const seconds = ((Date.now() - startTime) / 1000).toFixed(1);
-                console.log(`[${seconds}s] ${source} ${quality}: ${url}`);
+
+                console.log(`[${seconds}s] ${quality} ${source}: ${url}`);
 
                 if (quality === "AAC-128") aac128 = url;
                 if (quality === "AAC-64") aac64 = url;
             };
 
-            const onRequest = event => inspect(event.request.url, "REQUEST");
-            const onResponse = event => inspect(event.response.url, "RESPONSE");
+            const onRequest = request => {
+                inspect(request.url(), "REQUEST");
+            };
+
+            const onResponse = response => {
+                inspect(response.url(), "RESPONSE");
+            };
 
             try {
-                await cdp.send("Network.enable");
-
-                cdp.on("Network.requestWillBeSent", onRequest);
-                cdp.on("Network.responseReceived", onResponse);
+                // Listen to requests from the page and its frames.
+                context.on("request", onRequest);
+                context.on("response", onResponse);
 
                 await page.goto(station.url, {
                     waitUntil: "domcontentloaded",
                     timeout: 60000
                 });
 
-                console.log("MONITORING NETWORK FOR 25 SECONDS...");
+                console.log("SEARCHING FOR AAC-128 / AAC-64...");
                 await sleep(25000);
 
             } catch (error) {
                 console.log("PAGE ERROR:", error.message);
 
             } finally {
-                cdp.off("Network.requestWillBeSent", onRequest);
-                cdp.off("Network.responseReceived", onResponse);
-                await cdp.detach().catch(() => {});
+                context.off("request", onRequest);
+                context.off("response", onResponse);
                 await page.close().catch(() => {});
             }
 
@@ -112,8 +119,13 @@ async function main() {
         if (fs.existsSync(OUTPUT_FILE)) {
             try {
                 const oldData = JSON.parse(fs.readFileSync(OUTPUT_FILE, "utf8"));
-                if (!Array.isArray(oldData)) throw new Error("JSON is not an array");
+
+                if (!Array.isArray(oldData)) {
+                    throw new Error("JSON is not an array");
+                }
+
                 previousResults = oldData;
+
             } catch (error) {
                 console.error("ERROR READING JSON:", error.message);
                 console.error("UPDATE CANCELLED TO PROTECT OLD FILE.");
