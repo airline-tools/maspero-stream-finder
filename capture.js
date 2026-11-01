@@ -1,207 +1,247 @@
-
 const { chromium } = require("playwright");
 const fs = require("fs");
 
 const OUTPUT_FILE = "maspero-streams.json";
 
 const STATIONS = [
-    { name: "راديو مصر", frequency: "88.7 FM", url: "https://www.maspero.eg/stream/8" },
-    { name: "صوت العرب", frequency: "612 AM", url: "https://www.maspero.eg/stream/9" },
-    { name: "إذاعة البرنامج العام", frequency: "107.4 FM", url: "https://www.maspero.eg/stream/10" },
-    { name: "الشباب والرياضة", frequency: "108 FM", url: "https://www.maspero.eg/stream/11" },
-    { name: "البرنامج الثقافي ودراما FM", frequency: "91.5 FM", url: "https://www.maspero.eg/stream/12" },
-    { name: "الأغاني", frequency: "105.8 FM", url: "https://www.maspero.eg/stream/13" },
-    { name: "إذاعة القاهرة الكبرى", frequency: "102.2 FM", url: "https://www.maspero.eg/stream/14" },
-    { name: "الشرق الأوسط", frequency: "89.5 FM", url: "https://www.maspero.eg/stream/16" },
-    { name: "البرنامج الأوروبي", frequency: "95.4 FM", url: "https://www.maspero.eg/stream/18" }
+
+    {
+        name: "راديو مصر",
+        frequency: "88.7 FM",
+        url: "https://www.maspero.eg/stream/8"
+    },
+
+    {
+        name: "صوت العرب",
+        frequency: "612 AM",
+        url: "https://www.maspero.eg/stream/9"
+    },
+
+    {
+        name: "إذاعة البرنامج العام",
+        frequency: "107.4 FM",
+        url: "https://www.maspero.eg/stream/10"
+    },
+
+    {
+        name: "الشباب والرياضة",
+        frequency: "108 FM",
+        url: "https://www.maspero.eg/stream/11"
+    },
+
+    {
+        name: "البرنامج الثقافي ودراما FM",
+        frequency: "91.5 FM",
+        url: "https://www.maspero.eg/stream/12"
+    },
+
+    {
+        name: "الأغاني",
+        frequency: "105.8 FM",
+        url: "https://www.maspero.eg/stream/13"
+    },
+
+    {
+        name: "إذاعة القاهرة الكبرى",
+        frequency: "102.2 FM",
+        url: "https://www.maspero.eg/stream/14"
+    },
+
+    {
+        name: "الشرق الأوسط",
+        frequency: "89.5 FM",
+        url: "https://www.maspero.eg/stream/16"
+    },
+
+    {
+        name: "البرنامج الأوروبي",
+        frequency: "95.4 FM",
+        url: "https://www.maspero.eg/stream/18"
+    }
+
 ];
+
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function getQuality(url) {
-    if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) return "AAC-128";
-    if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) return "AAC-64";
-    return null;
-}
-
-const https = require("https");
-
-function testMasperoAccess(url) {
-    return new Promise(resolve => {
-        const req = https.get(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "text/html,application/xhtml+xml"
-            },
-            timeout: 20000
-        }, res => {
-            console.log("DIRECT HTTP STATUS:", res.statusCode);
-            res.resume();
-            resolve();
-        });
-
-        req.on("error", error => {
-            console.log("DIRECT HTTP ERROR:", error.message);
-            resolve();
-        });
-
-        req.on("timeout", () => {
-            console.log("DIRECT HTTP TIMEOUT");
-            req.destroy();
-            resolve();
-        });
-    });
-}
 
 async function main() {
-    await testMasperoAccess(
-    "https://www.maspero.eg/stream/8"
-);
+
     const browser = await chromium.launch({
-        headless: true,
-        args: ["--autoplay-policy=no-user-gesture-required"]
+        headless: true
     });
 
     try {
-        const context = await browser.newContext();
+
+        const page = await browser.newPage();
+
+        // Block unnecessary resources and advertising/tracking requests.
+await page.route("**/*", async route => {
+
+    const request = route.request();
+    const url = request.url();
+    const type = request.resourceType();
+
+    let hostname = "";
+
+    try {
+        hostname = new URL(url).hostname;
+    } catch {}
+
+    const blockedHosts =
+        /(^|\.)googleads\.g\.doubleclick\.net$/i.test(hostname) ||
+        /(^|\.)googlesyndication\.com$/i.test(hostname) ||
+        /(^|\.)2mdn\.net$/i.test(hostname) ||
+        /(^|\.)google-analytics\.com$/i.test(hostname) ||
+        /(^|\.)analytics\.google\.com$/i.test(hostname) ||
+        /(^|\.)fundingchoicesmessages\.google\.com$/i.test(hostname);
+
+    const trackingRequest =
+        /\/measurement\/conversion|\/g\/collect/i.test(url);
+
+    if (
+        type === "image" ||
+        type === "font" ||
+        blockedHosts ||
+        trackingRequest
+    ) {
+        return route.abort();
+    }
+
+    return route.continue();
+});
+
         const results = [];
 
         for (const station of STATIONS) {
-            console.log("\n==============================");
+
+            console.log("");
+            console.log("==============================");
             console.log("SEARCHING:", station.name);
+            console.log("FREQUENCY:", station.frequency);
             console.log("SOURCE:", station.url);
             console.log("==============================");
 
-            const page = await context.newPage();
-
             let aac128 = null;
             let aac64 = null;
-            let pageLoaded = false;
 
-            const seen = new Set();
-            const startTime = Date.now();
+const handler = request => {
 
-            const inspect = (url, source) => {
-                const quality = getQuality(url);
+    const url = request.url();
 
-                if (!quality || seen.has(url)) return;
+    if (/live-aac-128\.m3u8(?:$|[?#])/i.test(url)) {
 
-                seen.add(url);
+        aac128 = url;
 
-                const seconds = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log("AAC-128 FOUND:", url);
 
-                console.log(`[${seconds}s] ${quality} ${source}: ${url}`);
+    } else if (/live-aac-64\.m3u8(?:$|[?#])/i.test(url)) {
 
-                if (quality === "AAC-128") aac128 = url;
-                if (quality === "AAC-64") aac64 = url;
-            };
+        aac64 = url;
 
-            const onRequest = request => {
-                inspect(request.url(), "REQUEST");
-            };
+        console.log("AAC-64 FOUND:", url);
 
-            const onResponse = response => {
-                inspect(response.url(), "RESPONSE");
-            };
+    }
+
+};
+
+            page.on("request", handler);
 
             try {
-                // Listen to requests from the page and its frames.
-                context.on("request", onRequest);
-                context.on("response", onResponse);
 
-                // Retry opening the station page up to three times.
-                for (let attempt = 1; attempt <= 3; attempt++) {
-                    console.log(`PAGE ATTEMPT: ${attempt}/3`);
+                await page.goto(station.url, {
+                    waitUntil: "domcontentloaded",
+                    timeout: 60000
+                });
 
-                    try {
-                        const response = await page.goto(station.url, {
-                            waitUntil: "domcontentloaded",
-                            timeout: 60000
-                        });
-
-                        const status = response ? response.status() : 0;
-                        console.log("PAGE STATUS:", status);
-
-                        if (response && response.ok()) {
-                            pageLoaded = true;
-                            break;
-                        }
-
-                        console.log("PAGE NOT READY - RETRYING...");
-
-                    } catch (error) {
-                        console.log("PAGE ERROR:", error.message);
-                    }
-
-                    if (attempt < 3) {
-                        await sleep(5000);
-                    }
-                }
-
-                if (pageLoaded) {
-                    console.log("SEARCHING FOR AAC-128 / AAC-64...");
-                    await sleep(25000);
-                } else {
-                    console.log("PAGE UNAVAILABLE AFTER 3 ATTEMPTS");
-                }
+                await sleep(15000);
 
             } catch (error) {
-                console.log("CAPTURE ERROR:", error.message);
+
+                console.log("PAGE ERROR:", error.message);
 
             } finally {
-                context.off("request", onRequest);
-                context.off("response", onResponse);
-                await page.close().catch(() => {});
+
+                page.off("request", handler);
+
             }
 
             const selectedUrl = aac128 || aac64;
 
             if (selectedUrl) {
+
                 const quality = aac128 ? "AAC-128" : "AAC-64";
 
+                console.log("");
                 console.log("SELECTED:", quality);
+                console.log(selectedUrl);
 
                 results.push({
                     name: station.name,
                     frequency: station.frequency,
                     source: station.url,
                     url: selectedUrl,
-                    quality
+                    quality: quality
                 });
+
             } else {
-                console.log("NO AAC LINK FOUND");
+
+                console.log("");
+                console.log("NO AAC-128 OR AAC-64 FOUND");
+                console.log("OLD LINK WILL BE PRESERVED IF AVAILABLE");
+
             }
+
+            await page.goto("about:blank").catch(() => {});
+
         }
 
-        // Read the previous JSON without risking its contents.
+
+        // Read the existing JSON without deleting its old data.
         let previousResults = [];
 
         if (fs.existsSync(OUTPUT_FILE)) {
+
             try {
-                const oldData = JSON.parse(fs.readFileSync(OUTPUT_FILE, "utf8"));
+
+                const oldData = JSON.parse(
+                    fs.readFileSync(OUTPUT_FILE, "utf8")
+                );
 
                 if (!Array.isArray(oldData)) {
-                    throw new Error("JSON is not an array");
+                    throw new Error("Existing JSON is not an array");
                 }
 
                 previousResults = oldData;
 
             } catch (error) {
-                console.error("ERROR READING JSON:", error.message);
-                console.error("UPDATE CANCELLED TO PROTECT OLD FILE.");
+
+                console.error(
+                    "ERROR READING EXISTING JSON:",
+                    error.message
+                );
+
+                console.error(
+                    "UPDATE CANCELLED TO PROTECT THE OLD FILE."
+                );
+
                 process.exitCode = 1;
                 return;
+
             }
+
         }
 
+
+        // Index the old and newly discovered station links by source page.
         const previousBySource = new Map(
-            previousResults.map(item => [item.source, item])
+            previousResults.map(station => [station.source, station])
         );
 
         const newBySource = new Map(
-            results.map(item => [item.source, item])
+            results.map(station => [station.source, station])
         );
 
         let updated = 0;
@@ -209,60 +249,132 @@ async function main() {
         let unchanged = 0;
         let added = 0;
 
+
+        // Merge results station by station.
         const mergedResults = STATIONS.map(station => {
+
             const oldStation = previousBySource.get(station.url);
             const newStation = newBySource.get(station.url);
 
+            // Search did not find a link: keep the old station unchanged.
             if (!newStation) {
+
                 if (oldStation) {
+
                     preserved++;
-                    console.log("PRESERVED OLD LINK:", station.name);
+
+                    console.log(
+                        "PRESERVED OLD LINK:",
+                        station.name,
+                        oldStation.url
+                    );
+
                     return oldStation;
+
                 }
 
-                console.log("NO OLD OR NEW LINK:", station.name);
+                console.log(
+                    "NO LINK FOUND AND NO OLD LINK:",
+                    station.name
+                );
+
                 return null;
+
             }
 
+
+            // A link was found and this station already exists.
             if (oldStation) {
+
+                // Same stream URL: do not replace the existing record.
                 if (oldStation.url === newStation.url) {
+
                     unchanged++;
-                    console.log("UNCHANGED:", station.name);
+
+                    console.log(
+                        "UNCHANGED:",
+                        station.name
+                    );
+
                     return oldStation;
+
                 }
 
+                // Different stream URL: update to the newly discovered URL.
                 updated++;
-                console.log("UPDATED:", station.name);
+
+                console.log(
+                    "UPDATED LINK:",
+                    station.name
+                );
+
+                console.log("OLD:", oldStation.url);
+                console.log("NEW:", newStation.url);
+
                 return newStation;
+
             }
 
+
+            // First discovery of a station not already in the JSON.
             added++;
-            console.log("NEW LINK:", station.name);
+
+            console.log(
+                "NEW STATION LINK:",
+                station.name
+            );
+
             return newStation;
 
         }).filter(Boolean);
 
-        // Preserve entries that are not in the current station list.
-        const knownSources = new Set(STATIONS.map(item => item.url));
+
+        // Preserve any existing entries not included in STATIONS.
+        const knownSources = new Set(
+            STATIONS.map(station => station.url)
+        );
 
         for (const oldStation of previousResults) {
+
             if (!knownSources.has(oldStation.source)) {
+
                 mergedResults.push(oldStation);
-                console.log("PRESERVED UNLISTED:", oldStation.name);
+
+                console.log(
+                    "PRESERVED UNLISTED STATION:",
+                    oldStation.name
+                );
+
             }
+
         }
 
+
+        // Write only when the actual saved data has changed.
         const oldJson = JSON.stringify(previousResults, null, 2);
         const newJson = JSON.stringify(mergedResults, null, 2);
 
         if (oldJson !== newJson) {
-            fs.writeFileSync(OUTPUT_FILE, newJson, "utf8");
+
+            fs.writeFileSync(
+                OUTPUT_FILE,
+                newJson,
+                "utf8"
+            );
+
+            console.log("");
             console.log("JSON UPDATED");
+
         } else {
+
+            console.log("");
             console.log("NO CHANGES - OLD JSON PRESERVED");
+
         }
 
-        console.log("\n==============================");
+
+        console.log("");
+        console.log("==============================");
         console.log("FOUND THIS RUN:", results.length);
         console.log("UPDATED LINKS:", updated);
         console.log("NEW LINKS:", added);
@@ -272,11 +384,18 @@ async function main() {
         console.log("==============================");
 
     } finally {
+
         await browser.close();
+
     }
+
 }
 
+
 main().catch(error => {
+
     console.error("ERROR:", error);
+
     process.exitCode = 1;
+
 });
